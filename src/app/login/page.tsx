@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { UtensilsCrossed, Loader2 } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("restaurant_admin@demo.com");
@@ -43,19 +44,23 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
-      <div className="mb-8 flex flex-col items-center">
-        <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mb-4 text-white shadow-lg">
-          <UtensilsCrossed className="w-8 h-8" />
-        </div>
-        <h1 className="text-3xl font-black tracking-tight text-slate-900">Restaurant OS</h1>
-        <p className="text-slate-500">Sign in to manage your operations</p>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center p-4 transition-colors duration-200 relative">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
       </div>
 
-      <Card className="w-full max-w-md shadow-xl border-0">
+      <div className="mb-8 flex flex-col items-center">
+        <div className="w-16 h-16 bg-slate-900 dark:bg-amber-500 rounded-full flex items-center justify-center mb-4 text-white dark:text-slate-950 shadow-lg">
+          <UtensilsCrossed className="w-8 h-8" />
+        </div>
+        <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">Restaurant OS</h1>
+        <p className="text-slate-500 dark:text-slate-400">Sign in to manage your operations</p>
+      </div>
+
+      <Card className="w-full max-w-md shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <CardHeader className="space-y-1 pb-6">
-          <CardTitle className="text-2xl font-bold text-center">Sign In</CardTitle>
-          <CardDescription className="text-center">
+          <CardTitle className="text-2xl font-bold text-center text-slate-900 dark:text-white">Sign In</CardTitle>
+          <CardDescription className="text-center text-slate-500 dark:text-slate-400">
             Use admin@demo.com or waiter@demo.com
           </CardDescription>
         </CardHeader>
@@ -72,8 +77,8 @@ export default function LoginPage() {
                   }}
                   className={`flex flex-col items-center justify-center p-2 border rounded-xl transition-all ${
                     email === "restaurant_admin@demo.com" 
-                      ? "border-slate-900 bg-slate-900 text-white shadow-md scale-[1.02]" 
-                      : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 hover:bg-slate-50"
+                      ? "border-slate-900 bg-slate-900 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-slate-950 shadow-md scale-[1.02]" 
+                      : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
                   }`}
                 >
                   <span className="font-semibold text-xs sm:text-sm">Super Admin</span>
@@ -86,8 +91,8 @@ export default function LoginPage() {
                   }}
                   className={`flex flex-col items-center justify-center p-2 border rounded-xl transition-all ${
                     email === "admin@demo.com" 
-                      ? "border-slate-900 bg-slate-900 text-white shadow-md scale-[1.02]" 
-                      : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 hover:bg-slate-50"
+                      ? "border-slate-900 bg-slate-900 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-slate-950 shadow-md scale-[1.02]" 
+                      : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
                   }`}
                 >
                   <span className="font-semibold text-xs sm:text-sm">Admin</span>
@@ -100,8 +105,8 @@ export default function LoginPage() {
                   }}
                   className={`flex flex-col items-center justify-center p-2 border rounded-xl transition-all ${
                     email === "waiter@demo.com" 
-                      ? "border-slate-900 bg-slate-900 text-white shadow-md scale-[1.02]" 
-                      : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 hover:bg-slate-50"
+                      ? "border-slate-900 bg-slate-900 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-slate-950 shadow-md scale-[1.02]" 
+                      : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
                   }`}
                 >
                   <span className="font-semibold text-xs sm:text-sm">Waiter</span>
@@ -109,13 +114,13 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setEmail("kitchen_staff@demo.com");
+                    setEmail("kitchen@demo.com");
                     setPassword("password123");
                   }}
                   className={`flex flex-col items-center justify-center p-2 border rounded-xl transition-all ${
-                    email === "kitchen_staff@demo.com" 
-                      ? "border-slate-900 bg-slate-900 text-white shadow-md scale-[1.02]" 
-                      : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 hover:bg-slate-50"
+                    email === "kitchen@demo.com" 
+                      ? "border-slate-900 bg-slate-900 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-slate-950 shadow-md scale-[1.02]" 
+                      : "border-slate-200 bg-white hover:border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
                   }`}
                 >
                   <span className="font-semibold text-xs sm:text-sm">Kitchen</span>
