@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Users, UtensilsCrossed, ShoppingBag, ReceiptText, ChefHat, LogOut, Menu, Shield, Armchair } from "lucide-react";
+import { 
+  LayoutDashboard, Users, UtensilsCrossed, ShoppingBag, 
+  ReceiptText, ChefHat, LogOut, Menu, Shield, Armchair, X 
+} from "lucide-react";
 import { signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import type { Session } from "next-auth";
@@ -13,6 +16,23 @@ import type { Session } from "next-auth";
 export function Navigation({ session }: { session: Session | null }) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
+  // Prevent background scroll when mobile menu is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isOpen]);
 
   // Only show staff navigation on internal back-office routes
   const isInternalRoute = 
@@ -30,12 +50,10 @@ export function Navigation({ session }: { session: Session | null }) {
   const navItems = [];
 
   if (role === "SUPER_ADMIN") {
-    // Super Admin only sees their own panel
     navItems.push({ href: "/super-admin", label: "Super Admin", icon: <Shield className="w-4 h-4" /> });
   }
 
   if (role === "RESTAURANT_ADMIN" || role === "MANAGER") {
-    // Hotel-level management
     navItems.push({ href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> });
     navItems.push({ href: "/admin/tables", label: "Floor & Queue", icon: <Armchair className="w-4 h-4" /> });
     navItems.push({ href: "/admin/menu", label: "Menu Mgt", icon: <UtensilsCrossed className="w-4 h-4" /> });
@@ -57,27 +75,110 @@ export function Navigation({ session }: { session: Session | null }) {
     navItems.push({ href: "/kitchen/dashboard", label: "Kitchen (KDS)", icon: <ChefHat className="w-4 h-4" /> });
   }
 
-
   return (
     <>
-      {/* Mobile Nav Toggle */}
-      <div className="md:hidden p-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
-        <span className="font-bold tracking-tight">Resto OS</span>
+      {/* Mobile Top Header */}
+      <header className="md:hidden sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md text-slate-900 dark:text-white border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex justify-between items-center shadow-xs">
         <div className="flex items-center space-x-2">
+          <span className="font-black tracking-tight text-lg bg-gradient-to-r from-slate-900 to-indigo-700 dark:from-white dark:to-indigo-300 bg-clip-text text-transparent">
+            Resto OS
+          </span>
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+            {role.replace('_', ' ')}
+          </span>
+        </div>
+
+        <div className="flex items-center space-x-1.5">
           <ThemeToggle />
-          <Button variant="ghost" size="icon" onClick={() => setIsOpen(!isOpen)} className="hover:bg-slate-100 dark:hover:bg-slate-800">
-            <Menu className="w-6 h-6" />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setIsOpen(!isOpen)} 
+            aria-label="Toggle Navigation Menu"
+            className="hover:bg-slate-100 dark:hover:bg-slate-800 h-9 w-9 rounded-xl"
+          >
+            {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </Button>
         </div>
-      </div>
+      </header>
 
-      {/* Nav Topbar */}
-      <nav className={cn(
-        "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 md:flex flex-col md:flex-row md:items-center justify-between px-6 py-2.5 shadow-xs z-50",
-        isOpen ? "block" : "hidden md:flex"
-      )}>
-        <div className="flex flex-col md:flex-row md:items-center md:space-x-1 space-y-2 md:space-y-0">
-          <div className="hidden md:block font-black text-slate-950 dark:text-white mr-6 tracking-tighter text-xl">
+      {/* Mobile Backdrop & Drawer */}
+      {isOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex flex-col">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity" 
+            onClick={() => setIsOpen(false)} 
+          />
+
+          {/* Drawer Content */}
+          <div className="relative w-full max-w-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white h-full shadow-2xl flex flex-col z-10 border-r border-slate-200 dark:border-slate-800">
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <span className="font-black text-xl tracking-tight block">Resto OS</span>
+                <span className="text-xs text-slate-500">{session.user.name} ({role.replace('_', ' ')})</span>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setIsOpen(false)}
+                className="h-8 w-8 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            {/* Drawer Links */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+              {navItems.map((item) => {
+                const isActive = pathname.startsWith(item.href);
+                return (
+                  <Link 
+                    key={item.href} 
+                    href={item.href}
+                    onClick={() => setIsOpen(false)}
+                    className={cn(
+                      "flex items-center space-x-3 px-3.5 py-3 rounded-xl font-bold text-sm transition-all",
+                      isActive 
+                        ? "bg-slate-900 text-white dark:bg-slate-800 dark:text-white shadow-xs" 
+                        : "hover:bg-slate-100 dark:hover:bg-slate-800/70 text-slate-700 dark:text-slate-200"
+                    )}
+                  >
+                    <span className={cn(
+                      "p-1.5 rounded-lg", 
+                      isActive ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                    )}>
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-3 bg-slate-50/50 dark:bg-slate-950/40">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500">Theme</span>
+                <ThemeToggle />
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={() => signOut({ callbackUrl: "/login" })} 
+                className="w-full text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 font-bold h-10 rounded-xl flex items-center justify-center text-sm"
+              >
+                <LogOut className="w-4 h-4 mr-2" /> Sign Out
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Nav Topbar */}
+      <nav className="hidden md:flex bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 items-center justify-between px-6 py-2.5 shadow-xs sticky top-0 z-40 backdrop-blur-md">
+        <div className="flex items-center space-x-1">
+          <div className="font-black text-slate-950 dark:text-white mr-6 tracking-tighter text-xl">
             Resto OS
           </div>
           {navItems.map((item) => {
@@ -86,9 +187,8 @@ export function Navigation({ session }: { session: Session | null }) {
               <Link 
                 key={item.href} 
                 href={item.href}
-                onClick={() => setIsOpen(false)}
                 className={cn(
-                  "flex items-center space-x-2 px-3.5 py-1.5 rounded-lg font-semibold text-xs transition-colors",
+                  "flex items-center space-x-2 px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors",
                   isActive 
                     ? "bg-slate-900 text-white dark:bg-slate-800 dark:text-white shadow-2xs" 
                     : "hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-600 dark:text-slate-300"
@@ -101,10 +201,10 @@ export function Navigation({ session }: { session: Session | null }) {
           })}
         </div>
         
-        <div className="mt-3 md:mt-0 pt-3 md:pt-0 border-t border-slate-200 dark:border-slate-800 md:border-0 flex items-center justify-between md:justify-end space-x-3">
+        <div className="flex items-center space-x-3">
           <ThemeToggle />
           
-          <div className="text-xs hidden md:block text-right border-l border-slate-200 dark:border-slate-800 pl-3">
+          <div className="text-xs text-right border-l border-slate-200 dark:border-slate-800 pl-3">
             <span className="block text-slate-900 dark:text-white font-bold leading-tight">{session.user.name}</span>
             <span className="text-[10px] text-slate-500 font-semibold uppercase">{session.user.role.replace('_', ' ')}</span>
           </div>

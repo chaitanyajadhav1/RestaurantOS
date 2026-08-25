@@ -5,7 +5,8 @@ import { TableStatus } from "@prisma/client";
 import { 
   Users, Armchair, PlusCircle, Edit3, Trash2, CheckCircle2, 
   Phone, Sparkles, RefreshCw, X, ArrowRight,
-  Move, Check, Bell, Save, Sliders, Utensils, AlertTriangle
+  Move, Check, Bell, Save, Sliders, Utensils, AlertTriangle,
+  LayoutGrid, Layers, Search
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ import {
 import { 
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 export type RestaurantTable = {
   id: string;
@@ -72,6 +74,8 @@ export function UnifiedFloorQueueClient({
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedSection, setSelectedSection] = useState<string>("ALL");
   const [queueFilter, setQueueFilter] = useState<string>("ALL");
+  const [mobileTab, setMobileTab] = useState<"TABLES" | "QUEUE" | "FLOOR">("TABLES");
+  const [mobileStatusFilter, setMobileStatusFilter] = useState<string>("ALL");
 
   // Selection & Modal States
   const [draggedQueue, setDraggedQueue] = useState<QueueEntry | null>(null);
@@ -526,47 +530,284 @@ export function UnifiedFloorQueueClient({
   const unplacedTables = tables.filter(t => !placedTableIds.has(t.id));
   const sections = Array.from(new Set(tables.map(t => t.location || "Indoor").filter(Boolean)));
 
+  // Filter tables for Mobile Tables tab
+  const mobileFilteredTables = tables.filter(t => {
+    const sectionMatch = selectedSection === "ALL" || (t.location || "Indoor") === selectedSection;
+    const statusMatch = mobileStatusFilter === "ALL" || t.status === mobileStatusFilter;
+    return sectionMatch && statusMatch;
+  });
+
+  const renderQueueItem = (entry: QueueEntry) => {
+    const isBeingDragged = draggedQueue?.id === entry.id;
+    const isSelected = selectedQueueToSeat?.id === entry.id;
+
+    return (
+      <div
+        key={entry.id}
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData(
+            "application/json",
+            JSON.stringify({ queueId: entry.id, guests: entry.guests, tokenNumber: entry.tokenNumber })
+          );
+          setDraggedQueue(entry);
+        }}
+        onDragEnd={() => setDraggedQueue(null)}
+        onClick={() => {
+          if (selectedQueueToSeat?.id === entry.id) {
+            setSelectedQueueToSeat(null);
+          } else {
+            setSelectedQueueToSeat(entry);
+            toast({ title: `Token ${entry.tokenNumber} Selected`, description: "Click any green table to seat." });
+          }
+        }}
+        className={`p-3 rounded-xl border transition-all cursor-pointer select-none relative ${
+          isSelected
+            ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 ring-2 ring-emerald-400/50 shadow-xs"
+            : isBeingDragged
+            ? "opacity-40 border-dashed border-indigo-400 bg-indigo-50"
+            : entry.status === "CALLED"
+            ? "border-blue-300 bg-blue-50/70 hover:shadow-xs dark:bg-blue-950/30"
+            : entry.priority === "PRIORITY"
+            ? "border-amber-300 bg-amber-50/60 hover:shadow-xs dark:bg-amber-950/30"
+            : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-indigo-300 hover:shadow-xs"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-1.5 min-w-0">
+            <span className="font-black text-sm tracking-tight text-slate-900 dark:text-white">
+              {entry.tokenNumber}
+            </span>
+            <span className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate max-w-[120px]">
+              {entry.customer.name || "Guest"}
+            </span>
+            {entry.priority === "PRIORITY" && (
+              <Badge className="bg-amber-500 text-[9px] py-0 px-1 shrink-0">VIP</Badge>
+            )}
+            {entry.status === "CALLED" && (
+              <Badge className="bg-blue-600 text-[9px] py-0 px-1 animate-pulse shrink-0">CALL</Badge>
+            )}
+          </div>
+
+          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded shrink-0">
+            {entry.guests} Pax
+          </span>
+        </div>
+
+        <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
+          <span>{entry.customer.phone}</span>
+          {entry.preference && (
+            <span className="italic text-[10px] text-slate-400 truncate max-w-[100px]">
+              {entry.preference}
+            </span>
+          )}
+        </div>
+
+        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+          <div className="flex items-center space-x-2">
+            {entry.status === "WAITING" ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCallQueue(entry.id);
+                }}
+                className="text-blue-600 font-bold hover:underline flex items-center py-1"
+              >
+                <Bell className="w-3 h-3 mr-1" /> Call
+              </button>
+            ) : (
+              <span className="text-blue-600 font-semibold flex items-center">
+                <Check className="w-3 h-3 mr-1" /> Called
+              </span>
+            )}
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (selectedQueueToSeat?.id === entry.id) {
+                  setSelectedQueueToSeat(null);
+                } else {
+                  setSelectedQueueToSeat(entry);
+                  toast({ title: `Token ${entry.tokenNumber} Ready to Seat`, description: "Tap any Available table to seat!" });
+                }
+              }}
+              className="text-emerald-700 dark:text-emerald-400 font-bold hover:underline flex items-center py-1"
+            >
+              <Armchair className="w-3 h-3 mr-1" /> Seat Guest
+            </button>
+          </div>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCancelQueue(entry.id);
+            }}
+            className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+            title="Cancel token"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTableCard = (table: RestaurantTable, isHoveredTarget = false) => {
+    return (
+      <div
+        key={table.id}
+        draggable={isEditMode}
+        onDragStart={(e) => {
+          if (isEditMode) e.dataTransfer.setData("text/plain", table.id);
+        }}
+        onDragOver={(e) => {
+          if (!isEditMode && table.status === "AVAILABLE") {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            setDragOverTableId(table.id);
+          }
+        }}
+        onDragLeave={() => {
+          if (dragOverTableId === table.id) setDragOverTableId(null);
+        }}
+        onDrop={(e) => {
+          if (!isEditMode && table.status === "AVAILABLE") handleDropToSeat(table.id, e);
+        }}
+        onClick={() => {
+          if (isEditMode) {
+            setEditingTable(table);
+          } else if (selectedQueueToSeat && table.status === "AVAILABLE") {
+            handleAssignCustomerToTable(table.id, selectedQueueToSeat.id);
+          } else if (table.status === "AVAILABLE") {
+            setSelectedTableForAssign(table);
+          } else if (table.status === "OCCUPIED" || table.status === "CLEANING" || table.status === "RESERVED") {
+            setSelectedTableForManage(table);
+          }
+        }}
+        className={`min-h-[110px] rounded-xl border p-2.5 flex flex-col justify-between select-none relative shadow-2xs cursor-pointer active:scale-98 transition-all ${
+          isEditMode ? "cursor-move border-indigo-400 bg-white ring-1 ring-indigo-200" : getTableCardStyle(table.status, isHoveredTarget)
+        }`}
+      >
+        {/* Top: Table Number & Status */}
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center space-x-1">
+              <span className="font-black text-base tracking-tight text-slate-900 dark:text-white">
+                {table.number}
+              </span>
+              {isEditMode && <Edit3 className="w-3 h-3 text-indigo-500" />}
+            </div>
+            <span className="text-[9px] font-medium text-slate-500 uppercase tracking-wider block">
+              {table.location || "Indoor"}
+            </span>
+          </div>
+
+          <div>
+            {getStatusBadge(table.status)}
+          </div>
+        </div>
+
+        {/* Middle: Details */}
+        <div className="my-auto py-1">
+          {table.status === "OCCUPIED" ? (
+            <div className="text-[11px]">
+              {table.orders && table.orders[0] ? (
+                <div>
+                  <p className="font-bold text-rose-950 dark:text-rose-200 truncate">
+                    {table.orders[0].customer?.name || "Dine-in"}
+                  </p>
+                  <p className="text-[10px] text-slate-500 flex items-center">
+                    <Utensils className="w-2.5 h-2.5 mr-0.5 text-rose-500" />
+                    {table.orders[0].items?.length || 0} items
+                    {table.orders[0].total > 0 && ` • ₹${table.orders[0].total}`}
+                  </p>
+                </div>
+              ) : (
+                <p className="font-semibold text-rose-700 text-[10px]">Customer Seated</p>
+              )}
+            </div>
+          ) : table.status === "CLEANING" ? (
+            <div className="text-[10px] text-amber-700 font-medium flex items-center">
+              <Sparkles className="w-3 h-3 mr-0.5 text-amber-500" />
+              Ready for wipe
+            </div>
+          ) : isHoveredTarget ? (
+            <div className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-1.5 py-0.5 rounded text-center animate-bounce">
+              Drop to Seat!
+            </div>
+          ) : (
+            <div className="text-[11px] text-slate-500 flex items-center">
+              <Users className="w-3 h-3 mr-1 text-emerald-600" />
+              <span className="font-semibold text-slate-700 dark:text-slate-200">
+                {table.capacity} Seats
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom: Capacity & Action */}
+        <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-slate-100 dark:border-slate-800">
+          <span className="text-slate-400 font-medium">
+            Cap: {table.capacity}
+          </span>
+          {table.status === "AVAILABLE" && !isEditMode && (
+            <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center hover:underline">
+              Seat <ArrowRight className="w-2.5 h-2.5 ml-0.5" />
+            </span>
+          )}
+          {table.status === "CLEANING" && !isEditMode && (
+            <span className="text-amber-800 font-bold bg-amber-200 dark:bg-amber-900/60 dark:text-amber-300 px-1 rounded text-[9px]">
+              Clean
+            </span>
+          )}
+          {table.status === "OCCUPIED" && !isEditMode && (
+            <span className="text-rose-700 dark:text-rose-400 font-semibold text-[9px]">
+              Manage
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-2.5">
-      {/* ULTRA COMPACT TOP BAR: METRICS & CONTROLS IN ONE SLEEK ROW */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 shadow-xs flex flex-wrap items-center justify-between gap-2">
+      {/* TOP CONTROL BAR: METRICS & ACTIONS */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-3.5 py-2.5 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
         
-        {/* Left: Status Metrics Pills */}
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-semibold">
+        {/* Status Metrics Pills with horizontal scroll */}
+        <div className="flex items-center gap-1.5 text-xs overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+          <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-semibold shrink-0">
             <Armchair className="w-3.5 h-3.5 text-slate-500" />
             <span>Total: {totalTables}</span>
           </div>
-          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-semibold">
+          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-semibold shrink-0">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
             <span>{availableCount} Avail</span>
           </div>
-          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-semibold">
+          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-semibold shrink-0">
             <span className="w-2 h-2 rounded-full bg-rose-500" />
             <span>{occupiedCount} Occ ({occupancyPercent}%)</span>
           </div>
           {cleaningCount > 0 && (
-            <div className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-semibold">
+            <div className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-semibold shrink-0">
               <Sparkles className="w-3 h-3 text-amber-500" />
               <span>{cleaningCount} Clean</span>
             </div>
           )}
-          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold">
+          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold shrink-0">
             <Users className="w-3 h-3 text-blue-500" />
             <span>Queue: {queue.filter(q => q.status === "WAITING").length}</span>
           </div>
-          <span className="text-[11px] text-slate-400 hidden xl:inline ml-2">
-            💡 Drag queue card onto green table to seat
-          </span>
         </div>
 
-        {/* Right: Actions */}
-        <div className="flex items-center space-x-2">
+        {/* Actions & Walk-In */}
+        <div className="flex items-center space-x-2 shrink-0 justify-between md:justify-end">
           {selectedQueueToSeat && (
-            <div className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded-md flex items-center animate-pulse">
+            <div className="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center animate-pulse border border-emerald-300 dark:border-emerald-800">
               <span>Token {selectedQueueToSeat.tokenNumber}</span>
-              <button onClick={() => setSelectedQueueToSeat(null)} className="ml-1 hover:text-black">
-                <X className="w-3 h-3" />
+              <button onClick={() => setSelectedQueueToSeat(null)} className="ml-1.5 hover:text-black">
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
@@ -574,7 +815,7 @@ export function UnifiedFloorQueueClient({
           <Button
             onClick={() => setIsAddWalkInOpen(true)}
             size="sm"
-            className="h-7 text-xs bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 font-medium px-2.5 shadow-xs"
+            className="h-8 text-xs bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 font-bold px-3 rounded-xl shadow-xs"
           >
             <PlusCircle className="w-3.5 h-3.5 mr-1" />
             Add Walk-In
@@ -588,7 +829,7 @@ export function UnifiedFloorQueueClient({
                     variant="outline" 
                     size="sm" 
                     onClick={handleApplyPreset}
-                    className="h-7 text-xs px-2 border-dashed"
+                    className="h-8 text-xs px-2 border-dashed rounded-xl"
                   >
                     <Sliders className="w-3 h-3 mr-1" />
                     Preset
@@ -597,7 +838,7 @@ export function UnifiedFloorQueueClient({
                     onClick={handleSaveLayout}
                     disabled={isSavingLayout}
                     size="sm"
-                    className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-2.5"
+                    className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-2.5 rounded-xl"
                   >
                     <Save className="w-3 h-3 mr-1" />
                     {isSavingLayout ? "Saving..." : "Save Layout"}
@@ -606,7 +847,7 @@ export function UnifiedFloorQueueClient({
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsEditMode(false)}
-                    className="h-7 text-xs text-slate-500 px-2"
+                    className="h-8 text-xs text-slate-500 px-2 rounded-xl"
                   >
                     Cancel
                   </Button>
@@ -616,7 +857,7 @@ export function UnifiedFloorQueueClient({
                   onClick={() => setIsEditMode(true)}
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs border-slate-300 text-slate-700 dark:text-slate-200 font-medium px-2.5 hover:bg-slate-100"
+                  className="h-8 text-xs border-slate-300 text-slate-700 dark:text-slate-200 font-medium px-2.5 hover:bg-slate-100 rounded-xl"
                 >
                   <Move className="w-3.5 h-3.5 mr-1" />
                   Edit Layout
@@ -627,11 +868,167 @@ export function UnifiedFloorQueueClient({
         </div>
       </div>
 
-      {/* MAIN POS VIEWPORT: SIDEBAR + FLOOR CANVAS */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+      {/* MOBILE VIEW SWITCHER (Visible on screens < lg) */}
+      <div className="lg:hidden flex p-1 bg-slate-200/70 dark:bg-slate-950/80 rounded-2xl gap-1">
+        <button
+          onClick={() => setMobileTab("TABLES")}
+          className={cn(
+            "flex-1 flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-xs font-black transition-all",
+            mobileTab === "TABLES"
+              ? "bg-white text-slate-900 dark:bg-slate-900 dark:text-white shadow-xs"
+              : "text-slate-600 dark:text-slate-400"
+          )}
+        >
+          <LayoutGrid className="w-3.5 h-3.5" />
+          <span>Quick Tables ({totalTables})</span>
+        </button>
 
-        {/* LEFT COLUMN: LIVE QUEUE (3 cols on desktop) */}
-        <div className="lg:col-span-3 space-y-2">
+        <button
+          onClick={() => setMobileTab("QUEUE")}
+          className={cn(
+            "flex-1 flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-xs font-black transition-all",
+            mobileTab === "QUEUE"
+              ? "bg-white text-indigo-600 dark:bg-slate-900 dark:text-indigo-400 shadow-xs"
+              : "text-slate-600 dark:text-slate-400"
+          )}
+        >
+          <Users className="w-3.5 h-3.5" />
+          <span>Queue ({queue.filter(q => q.status === "WAITING" || q.status === "CALLED").length})</span>
+        </button>
+
+        <button
+          onClick={() => setMobileTab("FLOOR")}
+          className={cn(
+            "flex-1 flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-xs font-black transition-all",
+            mobileTab === "FLOOR"
+              ? "bg-white text-slate-900 dark:bg-slate-900 dark:text-white shadow-xs"
+              : "text-slate-600 dark:text-slate-400"
+          )}
+        >
+          <Armchair className="w-3.5 h-3.5" />
+          <span>Floor Map</span>
+        </button>
+      </div>
+
+      {/* MOBILE VIEW: QUICK TABLES (Screens < lg when active) */}
+      <div className={cn("lg:hidden space-y-3", mobileTab === "TABLES" ? "block" : "hidden")}>
+        {/* Filter Pills */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 space-y-2">
+          {/* Status Filter */}
+          <div className="flex items-center space-x-1 overflow-x-auto scrollbar-none pb-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 mr-1 shrink-0">Status:</span>
+            {[
+              { id: "ALL", label: `All (${totalTables})` },
+              { id: "AVAILABLE", label: `Avail (${availableCount})` },
+              { id: "OCCUPIED", label: `Occ (${occupiedCount})` },
+              { id: "CLEANING", label: `Clean (${cleaningCount})` },
+            ].map(f => (
+              <button
+                key={f.id}
+                onClick={() => setMobileStatusFilter(f.id)}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-bold rounded-lg shrink-0 transition-all",
+                  mobileStatusFilter === f.id
+                    ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Section Filter */}
+          {sections.length > 1 && (
+            <div className="flex items-center space-x-1 overflow-x-auto scrollbar-none border-t border-slate-100 dark:border-slate-800 pt-2">
+              <span className="text-[10px] uppercase font-bold text-slate-400 mr-1 shrink-0">Section:</span>
+              <button
+                onClick={() => setSelectedSection("ALL")}
+                className={cn(
+                  "px-2 py-0.5 text-[11px] font-bold rounded-lg shrink-0 transition-all",
+                  selectedSection === "ALL"
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                )}
+              >
+                All Sections
+              </button>
+              {sections.map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSelectedSection(s)}
+                  className={cn(
+                    "px-2 py-0.5 text-[11px] font-bold rounded-lg shrink-0 transition-all",
+                    selectedSection === s
+                      ? "bg-indigo-600 text-white shadow-xs"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                  )}
+                >
+                  {s} ({tables.filter(t => (t.location || "Indoor") === s).length})
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Tables Card Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pb-8">
+          {mobileFilteredTables.map(t => renderTableCard(t))}
+        </div>
+      </div>
+
+      {/* MOBILE VIEW: LIVE QUEUE (Screens < lg when active) */}
+      <div className={cn("lg:hidden space-y-3 pb-8", mobileTab === "QUEUE" ? "block" : "hidden")}>
+        <Card className="border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div className="flex items-center space-x-1.5">
+              <Users className="w-4 h-4 text-indigo-600" />
+              <span className="text-sm font-bold text-slate-900 dark:text-white">Waiting Guests ({filteredQueue.length})</span>
+            </div>
+            <div className="flex space-x-1">
+              {["ALL", "WAITING", "CALLED", "VIP"].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setQueueFilter(f)}
+                  className={`px-2 py-1 text-xs font-bold rounded-lg transition-all ${
+                    queueFilter === f
+                      ? "bg-indigo-600 text-white shadow-xs"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+          <CardContent className="p-3 space-y-2.5">
+            {filteredQueue.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">
+                <Users className="w-10 h-10 mx-auto mb-2 opacity-30 text-indigo-500" />
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No guests waiting in queue</p>
+                <Button
+                  onClick={() => setIsAddWalkInOpen(true)}
+                  size="sm"
+                  className="mt-3 bg-indigo-600 text-white rounded-xl text-xs"
+                >
+                  <PlusCircle className="w-3.5 h-3.5 mr-1" /> Add Walk-In Customer
+                </Button>
+              </div>
+            ) : (
+              filteredQueue.map(entry => renderQueueItem(entry))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* DESKTOP VIEW (Screens lg+) OR MOBILE FLOOR PLAN TAB */}
+      <div className={cn(
+        "grid-cols-1 lg:grid-cols-12 gap-3 items-start",
+        mobileTab === "FLOOR" ? "grid" : "hidden lg:grid"
+      )}>
+
+        {/* LEFT COLUMN: LIVE QUEUE (Hidden on mobile when in floor mode) */}
+        <div className="hidden lg:block lg:col-span-3 space-y-2">
           <Card className="border-slate-200 dark:border-slate-800 shadow-xs flex flex-col h-[calc(100vh-140px)] min-h-[500px]">
             
             {/* Header with Filter Pills */}
@@ -667,125 +1064,25 @@ export function UnifiedFloorQueueClient({
                   <p className="text-xs font-medium text-slate-600 dark:text-slate-300">Queue is empty</p>
                 </div>
               ) : (
-                filteredQueue.map((entry) => {
-                  const isBeingDragged = draggedQueue?.id === entry.id;
-                  const isSelected = selectedQueueToSeat?.id === entry.id;
-
-                  return (
-                    <div
-                      key={entry.id}
-                      draggable={true}
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData(
-                          "application/json",
-                          JSON.stringify({ queueId: entry.id, guests: entry.guests, tokenNumber: entry.tokenNumber })
-                        );
-                        setDraggedQueue(entry);
-                      }}
-                      onDragEnd={() => setDraggedQueue(null)}
-                      onClick={() => {
-                        if (selectedQueueToSeat?.id === entry.id) {
-                          setSelectedQueueToSeat(null);
-                        } else {
-                          setSelectedQueueToSeat(entry);
-                          toast({ title: `Token ${entry.tokenNumber} Selected`, description: "Click any green table to seat." });
-                        }
-                      }}
-                      className={`p-2.5 rounded-lg border transition-all cursor-grab active:cursor-grabbing select-none relative ${
-                        isSelected
-                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 ring-2 ring-emerald-400/50 shadow-xs"
-                          : isBeingDragged
-                          ? "opacity-40 border-dashed border-indigo-400 bg-indigo-50"
-                          : entry.status === "CALLED"
-                          ? "border-blue-300 bg-blue-50/70 hover:shadow-xs"
-                          : entry.priority === "PRIORITY"
-                          ? "border-amber-300 bg-amber-50/60 hover:shadow-xs"
-                          : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-indigo-300 hover:shadow-xs"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-1.5">
-                          <span className="font-black text-sm tracking-tight text-slate-900 dark:text-white">
-                            {entry.tokenNumber}
-                          </span>
-                          <span className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate max-w-[90px]">
-                            {entry.customer.name || "Guest"}
-                          </span>
-                          {entry.priority === "PRIORITY" && (
-                            <Badge className="bg-amber-500 text-[9px] py-0 px-1">VIP</Badge>
-                          )}
-                          {entry.status === "CALLED" && (
-                            <Badge className="bg-blue-600 text-[9px] py-0 px-1 animate-pulse">CALL</Badge>
-                          )}
-                        </div>
-
-                        <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                          {entry.guests}p
-                        </span>
-                      </div>
-
-                      <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
-                        <span>{entry.customer.phone}</span>
-                        {entry.preference && (
-                          <span className="italic text-[10px] text-slate-400 truncate max-w-[80px]">
-                            {entry.preference}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px]">
-                        {entry.status === "WAITING" ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCallQueue(entry.id);
-                            }}
-                            className="text-blue-600 font-bold hover:underline flex items-center"
-                          >
-                            <Bell className="w-2.5 h-2.5 mr-0.5" /> Call
-                          </button>
-                        ) : (
-                          <span className="text-blue-600 font-semibold flex items-center">
-                            <Check className="w-2.5 h-2.5 mr-0.5" /> Called
-                          </span>
-                        )}
-
-                        <span className="text-slate-400 text-[9px]">
-                          Drag to Seat 👉
-                        </span>
-
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCancelQueue(entry.id);
-                          }}
-                          className="text-slate-400 hover:text-rose-600 p-0.5"
-                          title="Cancel"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
+                filteredQueue.map((entry) => renderQueueItem(entry))
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* RIGHT COLUMN: FLOOR PLAN CANVAS (9 cols on desktop) */}
-        <div className="lg:col-span-9 space-y-2">
+        {/* RIGHT COLUMN: FLOOR PLAN CANVAS (12 cols on mobile, 9 cols on desktop) */}
+        <div className="col-span-1 lg:col-span-9 space-y-2">
           <Card className="border-slate-200 dark:border-slate-800 shadow-xs flex flex-col h-[calc(100vh-140px)] min-h-[500px] overflow-hidden">
             
             {/* Canvas Header & Section Pills */}
-            <div className="p-2.5 px-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 flex items-center justify-between">
+            <div className="p-2.5 px-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center space-x-1.5">
                 <Armchair className="w-3.5 h-3.5 text-indigo-600" />
                 <span className="text-xs font-bold text-slate-900 dark:text-white">Floor Layout</span>
               </div>
 
               {/* Section Tabs */}
-              <div className="flex items-center space-x-1 overflow-x-auto">
+              <div className="flex items-center space-x-1 overflow-x-auto scrollbar-none">
                 <button
                   onClick={() => setSelectedSection("ALL")}
                   className={`px-2 py-0.5 text-[10px] font-bold rounded transition-all ${
@@ -817,14 +1114,16 @@ export function UnifiedFloorQueueClient({
               
               {/* Unplaced Tables Fallback */}
               {unplacedTables.length > 0 && (
-                <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                  <span className="text-[11px] font-bold text-amber-900 mb-1 block">Additional Tables ({unplacedTables.length})</span>
+                <div className="mb-3 p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 rounded-xl">
+                  <span className="text-[11px] font-bold text-amber-900 dark:text-amber-200 mb-1.5 block">
+                    Additional Tables ({unplacedTables.length})
+                  </span>
                   <div className="flex flex-wrap gap-2">
                     {unplacedTables.map(t => (
                       <div
                         key={t.id}
                         onClick={() => t.status === "AVAILABLE" ? setSelectedTableForAssign(t) : setSelectedTableForManage(t)}
-                        className={`px-2.5 py-1 rounded-md border text-xs font-bold cursor-pointer ${getTableCardStyle(t.status, false)}`}
+                        className={`px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer ${getTableCardStyle(t.status, false)}`}
                       >
                         <span>{t.number}</span> • <span className="text-[10px]">{t.status}</span>
                       </div>
@@ -888,122 +1187,7 @@ export function UnifiedFloorQueueClient({
                         );
                       }
 
-                      // Compact Table Card (h-28 = 112px)
-                      return (
-                        <div
-                          key={table.id}
-                          draggable={isEditMode}
-                          onDragStart={(e) => {
-                            if (isEditMode) e.dataTransfer.setData("text/plain", table.id);
-                          }}
-                          onDragOver={(e) => {
-                            if (!isEditMode && table.status === "AVAILABLE") {
-                              e.preventDefault();
-                              e.dataTransfer.dropEffect = "move";
-                              setDragOverTableId(table.id);
-                            }
-                          }}
-                          onDragLeave={() => {
-                            if (dragOverTableId === table.id) setDragOverTableId(null);
-                          }}
-                          onDrop={(e) => {
-                            if (!isEditMode && table.status === "AVAILABLE") handleDropToSeat(table.id, e);
-                          }}
-                          onClick={() => {
-                            if (isEditMode) {
-                              setEditingTable(table);
-                            } else if (selectedQueueToSeat && table.status === "AVAILABLE") {
-                              handleAssignCustomerToTable(table.id, selectedQueueToSeat.id);
-                            } else if (table.status === "AVAILABLE") {
-                              setSelectedTableForAssign(table);
-                            } else if (table.status === "OCCUPIED" || table.status === "CLEANING" || table.status === "RESERVED") {
-                              setSelectedTableForManage(table);
-                            }
-                          }}
-                          className={`h-28 rounded-xl border p-2.5 flex flex-col justify-between select-none relative shadow-2xs cursor-pointer ${
-                            isEditMode ? "cursor-move border-indigo-400 bg-white ring-1 ring-indigo-200" : getTableCardStyle(table.status, isHoveredTarget)
-                          }`}
-                        >
-                          {/* Top: Table Number & Status */}
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className="flex items-center space-x-1">
-                                <span className="font-black text-base tracking-tight text-slate-900 dark:text-white">
-                                  {table.number}
-                                </span>
-                                {isEditMode && <Edit3 className="w-3 h-3 text-indigo-500" />}
-                              </div>
-                              <span className="text-[9px] font-medium text-slate-500 uppercase tracking-wider block">
-                                {table.location || "Indoor"}
-                              </span>
-                            </div>
-
-                            <div>
-                              {getStatusBadge(table.status)}
-                            </div>
-                          </div>
-
-                          {/* Middle: Details */}
-                          <div className="my-auto py-0.5">
-                            {table.status === "OCCUPIED" ? (
-                              <div className="text-[11px]">
-                                {table.orders && table.orders[0] ? (
-                                  <div>
-                                    <p className="font-bold text-rose-950 dark:text-rose-200 truncate">
-                                      {table.orders[0].customer?.name || "Dine-in"}
-                                    </p>
-                                    <p className="text-[10px] text-slate-500 flex items-center">
-                                      <Utensils className="w-2.5 h-2.5 mr-0.5 text-rose-500" />
-                                      {table.orders[0].items?.length || 0} items
-                                      {table.orders[0].total > 0 && ` • ₹${table.orders[0].total}`}
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <p className="font-semibold text-rose-700 text-[10px]">Customer Seated</p>
-                                )}
-                              </div>
-                            ) : table.status === "CLEANING" ? (
-                              <div className="text-[10px] text-amber-700 font-medium flex items-center">
-                                <Sparkles className="w-3 h-3 mr-0.5 text-amber-500" />
-                                Ready for wipe
-                              </div>
-                            ) : isHoveredTarget ? (
-                              <div className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-1.5 py-0.5 rounded text-center animate-bounce">
-                                Drop to Seat!
-                              </div>
-                            ) : (
-                              <div className="text-[11px] text-slate-500 flex items-center">
-                                <Users className="w-3 h-3 mr-1 text-emerald-600" />
-                                <span className="font-semibold text-slate-700 dark:text-slate-200">
-                                  {table.capacity} Seats
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Bottom: Capacity & Action */}
-                          <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-100 dark:border-slate-800">
-                            <span className="text-slate-400 font-medium">
-                              Cap: {table.capacity}
-                            </span>
-                            {table.status === "AVAILABLE" && !isEditMode && (
-                              <span className="text-emerald-700 font-bold flex items-center hover:underline">
-                                Quick Seat <ArrowRight className="w-2.5 h-2.5 ml-0.5" />
-                              </span>
-                            )}
-                            {table.status === "CLEANING" && !isEditMode && (
-                              <span className="text-amber-800 font-bold bg-amber-200 px-1 rounded text-[9px]">
-                                Clean
-                              </span>
-                            )}
-                            {table.status === "OCCUPIED" && !isEditMode && (
-                              <span className="text-rose-700 font-semibold text-[9px]">
-                                Manage
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
+                      return renderTableCard(table, isHoveredTarget);
                     })}
                   </React.Fragment>
                 ))}
@@ -1015,7 +1199,7 @@ export function UnifiedFloorQueueClient({
 
       {/* MODAL 1: ASSIGN / QUICK SEAT MODAL */}
       <Dialog open={!!selectedTableForAssign} onOpenChange={(open) => !open && setSelectedTableForAssign(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[94vw] max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2 text-base">
               <Armchair className="w-4 h-4 text-emerald-600" />
@@ -1075,7 +1259,7 @@ export function UnifiedFloorQueueClient({
 
       {/* MODAL 2: MANAGE OCCUPIED / CLEANING TABLE */}
       <Dialog open={!!selectedTableForManage} onOpenChange={(open) => !open && setSelectedTableForManage(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[94vw] max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2 text-base">
               <Armchair className="w-4 h-4 text-slate-700" />
@@ -1195,7 +1379,7 @@ export function UnifiedFloorQueueClient({
 
       {/* MODAL 3: ADD WALK-IN TO QUEUE */}
       <Dialog open={isAddWalkInOpen} onOpenChange={setIsAddWalkInOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[94vw] max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2 text-base">
               <PlusCircle className="w-4 h-4 text-indigo-600" />
@@ -1279,7 +1463,7 @@ export function UnifiedFloorQueueClient({
 
       {/* MODAL 4: ADD NEW TABLE */}
       <Dialog open={isAddTableOpen} onOpenChange={setIsAddTableOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[94vw] max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-base">Add New Table</DialogTitle>
           </DialogHeader>
@@ -1341,7 +1525,7 @@ export function UnifiedFloorQueueClient({
 
       {/* MODAL 5: EDIT TABLE */}
       <Dialog open={!!editingTable} onOpenChange={(open) => !open && setEditingTable(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[94vw] max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-base">Configure Table {editingTable?.number}</DialogTitle>
           </DialogHeader>

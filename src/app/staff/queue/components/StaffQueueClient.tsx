@@ -135,110 +135,204 @@ export function StaffQueueClient({ restaurantId }: { restaurantId: string }) {
   if (loading) return <div>Loading queue...</div>;
 
   return (
-    <Card>
+    <Card className="border-slate-200 dark:border-slate-800 shadow-xs">
       <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Token</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Guests / Pref</TableHead>
-              <TableHead>Wait Time</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {queue.map((entry) => {
-              const waitMs = new Date().getTime() - new Date(entry.createdAt).getTime();
-              const waitMins = Math.floor(waitMs / 60000);
+        {/* MOBILE CARD VIEW (Screens < md) */}
+        <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800 p-3 space-y-3">
+          {queue.map((entry) => {
+            const waitMs = new Date().getTime() - new Date(entry.createdAt).getTime();
+            const waitMins = Math.floor(waitMs / 60000);
 
-              return (
-                <TableRow key={entry.id} className={entry.status === 'CALLED' ? 'bg-blue-50' : ''}>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-bold text-lg">{entry.tokenNumber}</span>
-                      {entry.priority === 'PRIORITY' && (
-                        <Badge variant="destructive" className="text-[10px]">VIP</Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{entry.customer.name || 'Guest'}</div>
-                    <div className="text-xs text-slate-500">{entry.customer.phone}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2 text-sm">
-                      <span className="flex items-center"><Users className="w-3 h-3 mr-1"/> {entry.guests}</span>
-                      {entry.preference && <Badge variant="secondary">{entry.preference}</Badge>}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="flex items-center text-sm font-medium text-slate-700">
-                      <Clock className="w-3 h-3 mr-1"/> {waitMins}m
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={entry.status === 'CALLED' ? 'default' : 'outline'}>
+            return (
+              <div 
+                key={entry.id} 
+                className={`p-3.5 rounded-2xl border transition-all ${
+                  entry.status === 'CALLED'
+                    ? 'border-blue-300 bg-blue-50/70 dark:bg-blue-950/30'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-black text-lg text-slate-900 dark:text-white">{entry.tokenNumber}</span>
+                    {entry.priority === 'PRIORITY' && (
+                      <Badge className="bg-amber-500 text-[10px]">VIP</Badge>
+                    )}
+                    <Badge variant={entry.status === 'CALLED' ? 'default' : 'outline'} className="text-[10px]">
                       {entry.status}
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    {entry.status === 'WAITING' && (
-                      <Button size="sm" onClick={() => handleCallClick(entry.id)} className="bg-blue-600 hover:bg-blue-700">
-                        <Megaphone className="w-4 h-4 mr-1" /> Call & Seat
-                      </Button>
+                  </div>
+
+                  <span className="flex items-center text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
+                    <Users className="w-3.5 h-3.5 mr-1 text-slate-500" /> {entry.guests} Pax
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+                  <div>
+                    <span className="font-semibold text-slate-900 dark:text-white block">{entry.customer.name || 'Guest'}</span>
+                    <span className="text-[11px] text-slate-500">{entry.customer.phone}</span>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="flex items-center text-xs text-slate-500 justify-end">
+                      <Clock className="w-3 h-3 mr-1 text-amber-500" /> {waitMins}m wait
+                    </span>
+                    {entry.preference && (
+                      <span className="text-[10px] text-slate-400 italic block">{entry.preference}</span>
                     )}
-                    <Button size="sm" variant="ghost" className="text-red-500" onClick={() => updateStatus(entry.id, 'CANCELLED')}>
-                      <X className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                  {entry.status === 'WAITING' && (
+                    <Button 
+                      size="sm" 
+                      onClick={() => handleCallClick(entry.id)} 
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold h-9 rounded-xl text-xs"
+                    >
+                      <Megaphone className="w-3.5 h-3.5 mr-1" /> Call & Seat
                     </Button>
+                  )}
+                  {entry.status === 'CALLED' && (
+                    <Button 
+                      size="sm" 
+                      onClick={() => handleCallClick(entry.id)} 
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 rounded-xl text-xs"
+                    >
+                      <Check className="w-3.5 h-3.5 mr-1" /> Assign Table
+                    </Button>
+                  )}
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 h-9 px-3 rounded-xl" 
+                    onClick={() => updateStatus(entry.id, 'CANCELLED')}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+
+          {queue.length === 0 && (
+            <div className="text-center py-12 text-slate-400">
+              <Users className="w-10 h-10 mx-auto mb-2 opacity-30 text-indigo-500" />
+              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Queue is empty</p>
+            </div>
+          )}
+        </div>
+
+        {/* DESKTOP TABLE VIEW (Screens md+) */}
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Token</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Guests / Pref</TableHead>
+                <TableHead>Wait Time</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {queue.map((entry) => {
+                const waitMs = new Date().getTime() - new Date(entry.createdAt).getTime();
+                const waitMins = Math.floor(waitMs / 60000);
+
+                return (
+                  <TableRow key={entry.id} className={entry.status === 'CALLED' ? 'bg-blue-50/70 dark:bg-blue-950/30' : ''}>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-lg">{entry.tokenNumber}</span>
+                        {entry.priority === 'PRIORITY' && (
+                          <Badge variant="destructive" className="text-[10px]">VIP</Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium">{entry.customer.name || 'Guest'}</div>
+                      <div className="text-xs text-slate-500">{entry.customer.phone}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2 text-sm">
+                        <span className="flex items-center"><Users className="w-3 h-3 mr-1"/> {entry.guests}</span>
+                        {entry.preference && <Badge variant="secondary">{entry.preference}</Badge>}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex items-center text-sm font-medium text-slate-700 dark:text-slate-300">
+                        <Clock className="w-3 h-3 mr-1 text-amber-500"/> {waitMins}m
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={entry.status === 'CALLED' ? 'default' : 'outline'}>
+                        {entry.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      {entry.status === 'WAITING' && (
+                        <Button size="sm" onClick={() => handleCallClick(entry.id)} className="bg-blue-600 hover:bg-blue-700">
+                          <Megaphone className="w-4 h-4 mr-1" /> Call & Seat
+                        </Button>
+                      )}
+                      {entry.status === 'CALLED' && (
+                        <Button size="sm" onClick={() => handleCallClick(entry.id)} className="bg-emerald-600 hover:bg-emerald-700">
+                          <Check className="w-4 h-4 mr-1" /> Assign Table
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" className="text-red-500" onClick={() => updateStatus(entry.id, 'CANCELLED')}>
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {queue.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                    The queue is currently empty.
                   </TableCell>
                 </TableRow>
-              );
-            })}
-            {queue.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-slate-500">
-                  The queue is currently empty.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
 
+      {/* ASSIGN TABLE MODAL */}
       <Dialog open={!!selectedQueueId} onOpenChange={(open) => !open && setSelectedQueueId(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[94vw] max-w-md max-h-[88vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Assign Table</DialogTitle>
+            <DialogTitle className="text-base font-black">Assign Available Table</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 py-4 max-h-[60vh] overflow-y-auto pr-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 py-3 max-h-[60vh] overflow-y-auto pr-1">
             {tables.map((table) => {
               const isAvailable = table.status === 'AVAILABLE';
               return (
                 <Button
                   key={table.id}
                   variant={isAvailable ? "outline" : "secondary"}
-                  className={`h-24 flex flex-col gap-1 border-2 relative transition-all ${
+                  className={`h-20 flex flex-col items-center justify-center gap-0.5 border-2 rounded-xl relative transition-all ${
                     isAvailable 
-                      ? 'border-slate-200 hover:border-green-500 hover:bg-green-50/50' 
-                      : 'border-transparent bg-slate-100 opacity-60 cursor-not-allowed'
+                      ? 'border-emerald-200 hover:border-emerald-500 hover:bg-emerald-50/50 text-slate-900 dark:text-white' 
+                      : 'border-transparent bg-slate-100 dark:bg-slate-800 opacity-50 cursor-not-allowed text-slate-400'
                   }`}
                   onClick={() => isAvailable && assignTable(table.id)}
                   disabled={isAssigning || !isAvailable}
                 >
-                  <span className={`font-bold text-lg ${isAvailable ? 'text-slate-900' : 'text-slate-500'}`}>
+                  <span className="font-black text-base">
                     T{table.number}
                   </span>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-                    Cap: {table.capacity}
+                  <span className="text-[10px] font-bold text-slate-500">
+                    {table.capacity} Pax
                   </span>
                   {!isAvailable && (
-                    <div className="absolute inset-0 bg-slate-100/40 flex flex-col items-center justify-center rounded-md">
-                      <span className="bg-slate-800 text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest mt-10 shadow-sm">
-                        Occupied
-                      </span>
-                    </div>
+                    <span className="text-[9px] font-bold text-rose-500 uppercase">
+                      Occupied
+                    </span>
                   )}
                 </Button>
               );
