@@ -35,6 +35,7 @@ model Restaurant {
   orders         Order[]
   payments       Payment[]
   invitations    Invitation[]
+  serviceRequests ServiceRequest[]
 }
 
 model User {
@@ -84,6 +85,7 @@ model Table {
 
   restaurant   Restaurant  @relation(fields: [restaurantId], references: [id])
   orders       Order[]
+  serviceRequests ServiceRequest[]
 }
 
 enum QueueStatus {
@@ -220,4 +222,32 @@ model Invitation {
   createdAt    DateTime         @default(now())
 
   restaurant   Restaurant       @relation(fields: [restaurantId], references: [id])
+}
+
+enum ServiceRequestType {
+  CALL_WAITER
+  WATER
+  CLEANING
+  REQUEST_BILL
+  OTHER
+}
+
+enum ServiceRequestStatus {
+  PENDING
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model ServiceRequest {
+  id           String               @id @default(cuid())
+  restaurantId String
+  tableId      String
+  type         ServiceRequestType   @default(CALL_WAITER)
+  status       ServiceRequestStatus @default(PENDING)
+  notes        String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  restaurant   Restaurant           @relation(fields: [restaurantId], references: [id])
+  table        Table                @relation(fields: [tableId], references: [id])
 }

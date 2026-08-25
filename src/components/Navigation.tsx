@@ -5,12 +5,13 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { 
   LayoutDashboard, Users, UtensilsCrossed, ShoppingBag, 
-  ReceiptText, ChefHat, LogOut, Menu, Shield, Armchair, X 
+  ReceiptText, ChefHat, LogOut, Menu, Shield, Armchair, X, PlusCircle, Zap 
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { ThemeToggle } from "./ThemeToggle";
+import { ServiceRequestBell } from "./ServiceRequestBell";
 import type { Session } from "next-auth";
 
 export function Navigation({ session }: { session: Session | null }) {
@@ -56,15 +57,18 @@ export function Navigation({ session }: { session: Session | null }) {
   if (role === "RESTAURANT_ADMIN" || role === "MANAGER") {
     navItems.push({ href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> });
     navItems.push({ href: "/admin/tables", label: "Floor & Queue", icon: <Armchair className="w-4 h-4" /> });
+    navItems.push({ href: "/staff/pos", label: "Take Order", icon: <PlusCircle className="w-4 h-4 text-emerald-500" /> });
+    navItems.push({ href: "/staff/addons", label: "Quick Add-Ons", icon: <Zap className="w-4 h-4 text-amber-500 fill-amber-500" /> });
     navItems.push({ href: "/admin/menu", label: "Menu Mgt", icon: <UtensilsCrossed className="w-4 h-4" /> });
     navItems.push({ href: "/admin/staff", label: "Staff Mgt", icon: <Users className="w-4 h-4" /> });
-    navItems.push({ href: "/staff/queue", label: "Queue Only", icon: <Users className="w-4 h-4" /> });
     navItems.push({ href: "/staff/orders", label: "Orders", icon: <ShoppingBag className="w-4 h-4" /> });
     navItems.push({ href: "/staff/billing", label: "Billing", icon: <ReceiptText className="w-4 h-4" /> });
     navItems.push({ href: "/kitchen/dashboard", label: "Kitchen (KDS)", icon: <ChefHat className="w-4 h-4" /> });
   }
 
   if (role === "WAITER" || role === "CASHIER") {
+    navItems.push({ href: "/staff/pos", label: "Take Order (POS)", icon: <PlusCircle className="w-4 h-4 text-emerald-500" /> });
+    navItems.push({ href: "/staff/addons", label: "Quick Add-Ons", icon: <Zap className="w-4 h-4 text-amber-500 fill-amber-500" /> });
     navItems.push({ href: "/staff/tables", label: "Floor & Seating", icon: <Armchair className="w-4 h-4" /> });
     navItems.push({ href: "/staff/queue", label: "Queue", icon: <Users className="w-4 h-4" /> });
     navItems.push({ href: "/staff/orders", label: "Orders", icon: <ShoppingBag className="w-4 h-4" /> });
@@ -89,6 +93,7 @@ export function Navigation({ session }: { session: Session | null }) {
         </div>
 
         <div className="flex items-center space-x-1.5">
+          <ServiceRequestBell />
           <ThemeToggle />
           <Button 
             variant="ghost" 
@@ -202,6 +207,7 @@ export function Navigation({ session }: { session: Session | null }) {
         </div>
         
         <div className="flex items-center space-x-3">
+          <ServiceRequestBell />
           <ThemeToggle />
           
           <div className="text-xs text-right border-l border-slate-200 dark:border-slate-800 pl-3">

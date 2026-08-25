@@ -8,7 +8,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TableStatus } from "@prisma/client";
-import { Users, Armchair } from "lucide-react";
+import Link from "next/link";
+import { Users, Armchair, PlusCircle, Zap } from "lucide-react";
 
 type RestaurantTable = {
   id: string;
@@ -87,8 +88,18 @@ export function StaffTablesClient({
           <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 text-[11px]">Cleaning</Badge>
           <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 text-[11px]">Reserved</Badge>
         </div>
-        <div className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300">
-          Waiting in Queue: <strong className="text-slate-900 dark:text-white font-bold">{queue.length}</strong>
+        
+        <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
+          <Link href="/staff/addons">
+            <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl h-8 px-3">
+              <Zap className="w-3.5 h-3.5 mr-1 fill-current" /> Quick Add-Ons
+            </Button>
+          </Link>
+          <Link href="/staff/pos">
+            <Button size="sm" className="bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold rounded-xl h-8 px-3">
+              <PlusCircle className="w-3.5 h-3.5 mr-1 text-amber-400" /> POS
+            </Button>
+          </Link>
         </div>
       </div>
 

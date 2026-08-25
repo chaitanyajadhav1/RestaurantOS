@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { TableStatus } from "@prisma/client";
 import { 
   Users, Armchair, PlusCircle, Edit3, Trash2, CheckCircle2, 
   Phone, Sparkles, RefreshCw, X, ArrowRight,
   Move, Check, Bell, Save, Sliders, Utensils, AlertTriangle,
-  LayoutGrid, Layers, Search
+  LayoutGrid, Layers, Search, Zap
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1328,8 +1329,26 @@ export function UnifiedFloorQueueClient({
               </div>
             )}
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label className="text-[10px] font-semibold uppercase text-slate-500">Quick Actions</Label>
+              
+              {selectedTableForManage?.status === "OCCUPIED" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Link href={`/staff/addons?tableId=${selectedTableForManage.id}`} className="block w-full">
+                    <Button className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs h-9 font-black rounded-xl shadow-xs flex items-center justify-center">
+                      <Zap className="w-3.5 h-3.5 mr-1 fill-current" />
+                      Quick Add-Ons
+                    </Button>
+                  </Link>
+                  <Link href="/staff/pos" className="block w-full">
+                    <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 text-xs h-9 font-bold rounded-xl shadow-xs flex items-center justify-center">
+                      <Utensils className="w-3.5 h-3.5 mr-1 text-amber-400" />
+                      Full POS
+                    </Button>
+                  </Link>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 {selectedTableForManage?.status === "OCCUPIED" && (
                   <>

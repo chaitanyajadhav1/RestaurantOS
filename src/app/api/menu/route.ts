@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!['SUPER_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER'].includes(session.user.role)) {
+    if (!['SUPER_ADMIN', 'RESTAURANT_ADMIN', 'MANAGER', 'WAITER', 'CASHIER'].includes(session.user.role)) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

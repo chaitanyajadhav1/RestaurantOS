@@ -216,8 +216,13 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
                       {item.menuItem?.name || "Dish Item"}
                     </span>
                     {item.specialInstructions && (
-                      <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 rounded px-2 py-1 mt-1 italic">
-                        Note: {item.specialInstructions}
+                      <p className={cn(
+                        "text-xs rounded px-2 py-1 mt-1 font-semibold",
+                        item.specialInstructions.includes("ADD-ON")
+                          ? "bg-amber-500 text-slate-950 font-black shadow-xs flex items-center gap-1"
+                          : "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 italic"
+                      )}>
+                        {item.specialInstructions}
                       </p>
                     )}
                   </div>

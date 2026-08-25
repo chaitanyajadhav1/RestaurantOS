@@ -236,8 +236,49 @@ export function CustomerAppView({
   };
 
   // Service Quick Actions
-  const handleCallService = (actionName: string, icon: string) => {
-    toast.success(`${icon} ${actionName} requested! Staff will arrive shortly.`);
+  const handleCallService = async (actionName: string, icon: string) => {
+    const tableId = statusData?.table?.tableId;
+
+    if (!tableId) {
+      toast.error("Please ensure you are assigned to a table to request table service.");
+      return;
+    }
+
+    let reqType = "CALL_WAITER";
+    let notes: string | undefined = undefined;
+
+    if (actionName.toLowerCase().includes("water")) {
+      reqType = "WATER";
+    } else if (actionName.toLowerCase().includes("bill")) {
+      reqType = "REQUEST_BILL";
+    } else if (actionName.toLowerCase().includes("clean")) {
+      reqType = "CLEANING";
+    } else if (actionName.toLowerCase().includes("cutlery") || actionName.toLowerCase().includes("plate")) {
+      reqType = "OTHER";
+      notes = "Extra Cutlery & Napkins";
+    }
+
+    try {
+      const res = await fetch("/api/service-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId: restaurant.id,
+          tableId,
+          type: reqType,
+          notes
+        })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`${icon} ${actionName} requested! Staff will arrive at Table ${statusData.table?.tableNumber} shortly.`);
+      } else {
+        toast.error(json.error || "Failed to notify staff");
+      }
+    } catch (err) {
+      toast.error("Network error requesting service");
+    }
   };
 
   // Filter items
