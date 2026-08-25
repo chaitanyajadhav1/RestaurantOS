@@ -39,5 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
 /src/generated/prisma
+*.apk
+customer-app/android/.gradle/
+customer-app/android/build/
+customer-app/android/app/build/
+customer-app/android/local.properties
