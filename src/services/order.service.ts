@@ -1,23 +1,36 @@
 import { prisma } from "@/lib/prisma";
-import { PrismaClient, OrderStatus } from '@prisma/client';
-
-
+import { OrderStatus } from '@prisma/client';
 
 export class OrderService {
   /**
-   * Adds items to an existing order or creates a new one
+   * Adds items to an existing party order or creates a new one (Supports Shared Tables)
    */
   static async placeOrder(data: {
     restaurantId: string;
+    orderId?: string;
     customerId?: string;
     tableId?: string;
     queueId?: string;
+    partyLabel?: string;
+    guestCount?: number;
+    groupName?: string;
     type: string; // 'DINE_IN' | 'TAKEAWAY'
     items: { menuItemId: string; quantity: number; specialInstructions?: string }[];
   }) {
-    const { restaurantId, customerId, tableId, queueId, type, items } = data;
+    const { 
+      restaurantId, 
+      orderId: explicitOrderId, 
+      customerId, 
+      tableId, 
+      queueId, 
+      partyLabel = "A", 
+      guestCount = 1,
+      groupName,
+      type, 
+      items 
+    } = data;
 
-    // Calculate totals
+    // 1. Calculate item details and subtotal
     let subtotal = 0;
     const itemDetails = await Promise.all(
       items.map(async (item) => {
@@ -31,79 +44,90 @@ export class OrderService {
       })
     );
 
-    // Fetch tax settings from restaurant if any (default to 5% for MVP)
+    // 2. Fetch tax settings from restaurant if any (default to 5%)
     const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId } });
-    const taxRate = (restaurant?.settings as Record<string, unknown>)?.tax as number || 5;
+    const taxRate = ((restaurant?.settings as Record<string, unknown>)?.tax as number) || 5;
     const tax = (subtotal * taxRate) / 100;
     const total = subtotal + tax;
 
-    let orderId: string;
+    let targetOrderId: string;
 
-    // Check if an open order already exists for this table/queue (from seating)
+    // 3. Find existing open order for this exact party or table
     let existingOrder = null;
-    if (tableId) {
+
+    if (explicitOrderId) {
+      existingOrder = await prisma.order.findUnique({
+        where: { id: explicitOrderId },
+      });
+    } else if (tableId) {
       existingOrder = await prisma.order.findFirst({
         where: {
           restaurantId,
           tableId,
-          status: { in: [OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.PREPARING] }
-        }
+          partyLabel: partyLabel || "A",
+          status: { in: [OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.PREPARING] },
+        },
       });
     }
 
     if (existingOrder) {
-      // Add items to existing order
-      orderId = existingOrder.id;
-      
+      // Add items to existing party order
+      targetOrderId = existingOrder.id;
+
       await prisma.order.update({
-        where: { id: orderId },
+        where: { id: targetOrderId },
         data: {
           subtotal: existingOrder.subtotal + subtotal,
           tax: existingOrder.tax + tax,
           total: existingOrder.total + total,
-        }
+        },
       });
 
       // Create order items
       await prisma.orderItem.createMany({
-        data: itemDetails.map(item => ({
-          orderId,
+        data: itemDetails.map((item) => ({
+          orderId: targetOrderId,
           menuItemId: item.menuItemId,
           quantity: item.quantity,
           price: item.price,
-          specialInstructions: item.specialInstructions
-        }))
+          specialInstructions: item.specialInstructions,
+        })),
       });
-
     } else {
-      // Create new order
+      // Create new party order
       const newOrder = await prisma.order.create({
         data: {
           restaurantId,
           customerId,
           tableId,
           queueId,
+          partyLabel: partyLabel || "A",
+          guestCount: guestCount || 1,
+          groupName: groupName || (partyLabel ? `Party ${partyLabel}` : undefined),
           type,
           status: OrderStatus.PLACED,
           subtotal,
           tax,
           total,
           items: {
-            create: itemDetails.map(item => ({
+            create: itemDetails.map((item) => ({
               menuItemId: item.menuItemId,
               quantity: item.quantity,
               price: item.price,
-              specialInstructions: item.specialInstructions
-            }))
-          }
-        }
+              specialInstructions: item.specialInstructions,
+            })),
+          },
+        },
       });
-      orderId = newOrder.id;
+      targetOrderId = newOrder.id;
     }
 
     return await prisma.order.findUnique({
-      where: { id: orderId },
-      include: { items: { include: { menuItem: true } } }
+      where: { id: targetOrderId },
+      include: {
+        table: true,
+        items: { include: { menuItem: true } },
+      },
     });
   }
 
@@ -113,7 +137,7 @@ export class OrderService {
   static async updateStatus(orderId: string, status: OrderStatus) {
     return await prisma.order.update({
       where: { id: orderId },
-      data: { status }
+      data: { status },
     });
   }
 }

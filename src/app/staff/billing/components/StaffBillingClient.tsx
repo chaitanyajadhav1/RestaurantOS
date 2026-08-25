@@ -22,6 +22,9 @@ type Order = {
   id: string;
   status: string;
   type: string;
+  partyLabel?: string | null;
+  guestCount?: number | null;
+  groupName?: string | null;
   subtotal: number;
   tax: number;
   total: number;
@@ -177,9 +180,14 @@ export function StaffBillingClient({ initialOrders }: { initialOrders: Order[] }
                     <div>
                       <span className="font-bold text-slate-900 dark:text-white block">
                         {order.table ? `Table ${order.table.number}` : 'Takeaway'}
+                        {order.partyLabel && (
+                          <span className="ml-1 text-[10px] bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 px-1.5 py-0.2 rounded font-black">
+                            Group {order.partyLabel}
+                          </span>
+                        )}
                       </span>
                       <span className="text-[11px] text-slate-400">
-                        {order.customer?.name || 'Walk-in Guest'}
+                        {order.customer?.name || (order.guestCount ? `${order.guestCount} Guests` : 'Walk-in Guest')}
                       </span>
                     </div>
                     <span className="text-[11px] text-slate-400">
@@ -223,11 +231,18 @@ export function StaffBillingClient({ initialOrders }: { initialOrders: Order[] }
                   {orders.map((order) => (
                     <TableRow key={order.id} className={order.status === 'SERVED' ? 'bg-green-50/60 dark:bg-green-950/20' : ''}>
                       <TableCell className="font-mono font-medium text-slate-700 dark:text-slate-300">
-                        {order.id.slice(-6).toUpperCase()}
+                        #{order.id.slice(-6).toUpperCase()}
                       </TableCell>
                       <TableCell>
-                        <div className="font-bold">{order.table ? `Table ${order.table.number}` : 'Takeaway'}</div>
-                        <div className="text-xs text-slate-500">{order.customer?.name || 'Walk-in'}</div>
+                        <div className="font-bold flex items-center space-x-1.5">
+                          <span>{order.table ? `Table ${order.table.number}` : 'Takeaway'}</span>
+                          {order.partyLabel && (
+                            <span className="text-[10px] bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 px-1.5 py-0.5 rounded font-black">
+                              Group {order.partyLabel}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500">{order.customer?.name || (order.guestCount ? `${order.guestCount} Guests` : 'Walk-in')}</div>
                       </TableCell>
                       <TableCell className="text-sm text-slate-600 dark:text-slate-300">
                         {formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}

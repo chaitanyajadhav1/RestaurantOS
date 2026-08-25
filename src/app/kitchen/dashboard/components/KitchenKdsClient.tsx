@@ -25,6 +25,9 @@ type Order = {
   id: string;
   status: string;
   type: string;
+  partyLabel?: string | null;
+  guestCount?: number | null;
+  groupName?: string | null;
   createdAt: string;
   table?: { number: string; location?: string | null } | null;
   customer?: { name: string | null; phone?: string } | null;
@@ -164,9 +167,14 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
         {/* Card Header */}
         <div className="flex items-start justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white">
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+              <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center">
                 {order.table ? `Table ${order.table.number}` : 'Takeaway'}
+                {order.partyLabel && (
+                  <span className="ml-1.5 text-xs font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 px-1.5 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">
+                    Group {order.partyLabel}
+                  </span>
+                )}
               </span>
               {fresh && isNew && (
                 <span className="bg-emerald-500 text-white font-black text-[10px] px-2 py-0.5 rounded-full animate-pulse uppercase">
@@ -189,6 +197,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
               <span>#{order.id.slice(-6).toUpperCase()}</span>
               {order.table?.location && <span>• {order.table.location}</span>}
               {order.customer?.name && <span>• {order.customer.name}</span>}
+              {order.guestCount && <span>• {order.guestCount} Pax</span>}
             </div>
           </div>
 

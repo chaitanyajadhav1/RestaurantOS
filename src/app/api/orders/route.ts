@@ -47,7 +47,17 @@ export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
     
     const body = await req.json();
-    const { restaurantId, tableId, queueId, type, items } = body;
+    const { 
+      restaurantId, 
+      orderId, 
+      tableId, 
+      queueId, 
+      partyLabel, 
+      guestCount, 
+      groupName, 
+      type, 
+      items 
+    } = body;
 
     const resolvedRestaurantId = session?.user?.restaurantId || restaurantId;
 
@@ -72,7 +82,7 @@ export async function POST(req: Request) {
         orderBy: { createdAt: 'desc' }
       });
 
-      if (activeTableOrder && activeTableOrder.table && activeTableOrder.table.status === 'OCCUPIED') {
+      if (activeTableOrder && activeTableOrder.table && ['OCCUPIED', 'PARTIALLY_OCCUPIED'].includes(activeTableOrder.table.status)) {
         targetTableId = activeTableOrder.tableId;
         targetQueueId = activeTableOrder.queueId || undefined;
       }
@@ -80,9 +90,13 @@ export async function POST(req: Request) {
 
     const order = await OrderService.placeOrder({
       restaurantId: resolvedRestaurantId,
+      orderId,
       customerId,
       tableId: targetTableId,
       queueId: targetQueueId,
+      partyLabel,
+      guestCount,
+      groupName,
       type: type || 'DINE_IN',
       items
     });

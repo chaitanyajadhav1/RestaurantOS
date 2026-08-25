@@ -42,6 +42,9 @@ export type MenuCategory = {
 export type TableOrder = {
   id: string;
   status: string;
+  partyLabel?: string | null;
+  guestCount?: number | null;
+  groupName?: string | null;
   total: number;
   subtotal: number;
   tax: number;
@@ -60,7 +63,7 @@ export type Table = {
   number: string;
   capacity: number;
   location?: string | null;
-  status: "AVAILABLE" | "OCCUPIED" | "RESERVED" | "CLEANING" | "OUT_OF_SERVICE";
+  status: "AVAILABLE" | "PARTIALLY_OCCUPIED" | "OCCUPIED" | "RESERVED" | "CLEANING" | "OUT_OF_SERVICE";
   orders?: TableOrder[];
 };
 
@@ -99,7 +102,7 @@ export function WaiterAddonsClient({
   // Filter occupied tables first, or fallback to all tables
   const occupiedTables = useMemo(() => {
     return tables.filter(
-      (t) => t.status === "OCCUPIED" || (t.orders && t.orders.length > 0)
+      (t) => t.status === "OCCUPIED" || t.status === "PARTIALLY_OCCUPIED" || (t.orders && t.orders.length > 0)
     );
   }, [tables]);
 
@@ -108,6 +111,11 @@ export function WaiterAddonsClient({
       return initialTableId;
     }
     return occupiedTables[0]?.id || tables[0]?.id || "";
+  });
+
+  const [selectedOrderId, setSelectedOrderId] = useState<string>(() => {
+    const table = tables.find(t => t.id === (initialTableId || occupiedTables[0]?.id || tables[0]?.id));
+    return table?.orders?.[0]?.id || "";
   });
 
   const [showAllTables, setShowAllTables] = useState(false);
@@ -142,7 +150,13 @@ export function WaiterAddonsClient({
     return tables.find((t) => t.id === selectedTableId) || null;
   }, [tables, selectedTableId]);
 
-  const activeOrder = selectedTable?.orders && selectedTable.orders[0];
+  const activeOrder = useMemo(() => {
+    if (!selectedTable?.orders || selectedTable.orders.length === 0) return null;
+    if (selectedOrderId) {
+      return selectedTable.orders.find((o) => o.id === selectedOrderId) || selectedTable.orders[0];
+    }
+    return selectedTable.orders[0];
+  }, [selectedTable, selectedOrderId]);
 
   const allItems = useMemo(() => {
     return categories.flatMap((c) => c.items);
@@ -347,6 +361,9 @@ export function WaiterAddonsClient({
       const payload = {
         restaurantId: restaurant.id,
         tableId: selectedTable.id,
+        orderId: activeOrder?.id,
+        partyLabel: activeOrder?.partyLabel || "A",
+        guestCount: activeOrder?.guestCount || 1,
         type: "DINE_IN",
         items: addonEntries.map((e) => ({
           menuItemId: e.menuItem.id,
@@ -366,14 +383,34 @@ export function WaiterAddonsClient({
       const json = await res.json();
 
       if (json.success) {
-        // Update local table data
+        // Update local table data preserving other groups
         setTables((prev) =>
           prev.map((t) => {
             if (t.id === selectedTable.id) {
+              const existingOrders = t.orders || [];
+              const orderIndex = existingOrders.findIndex((o) => o.id === json.data.id);
+              let updatedOrders: TableOrder[];
+              if (orderIndex >= 0) {
+                updatedOrders = existingOrders.map((o) =>
+                  o.id === json.data.id ? json.data : o
+                );
+              } else {
+                updatedOrders = [json.data, ...existingOrders];
+              }
+
+              const totalOccupiedSeats = updatedOrders.reduce(
+                (sum, o) => sum + (o.guestCount || 1),
+                0
+              );
+              const nextStatus =
+                totalOccupiedSeats >= t.capacity
+                  ? "OCCUPIED"
+                  : "PARTIALLY_OCCUPIED";
+
               return {
                 ...t,
-                status: "OCCUPIED",
-                orders: [json.data],
+                status: nextStatus,
+                orders: updatedOrders,
               };
             }
             return t;
@@ -382,7 +419,7 @@ export function WaiterAddonsClient({
 
         setAddonsCart({});
         toast({
-          title: `⚡ Add-On KOT Dispatched for Table ${selectedTable.number}`,
+          title: `⚡ Add-On KOT Dispatched for Table ${selectedTable.number} [Group ${activeOrder?.partyLabel || "A"}]`,
           description: `${addonItemsCount} item(s) sent straight to kitchen.`,
         });
       } else {
@@ -515,15 +552,21 @@ export function WaiterAddonsClient({
           <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
             {displayedTables.map((t) => {
               const isSelected = t.id === selectedTableId;
-              const hasOrder = t.orders && t.orders.length > 0;
-              const currentTotal = hasOrder ? t.orders![0].total : 0;
-              const currentItemsCount = hasOrder ? t.orders![0].items.length : 0;
+              const ordersCount = t.orders ? t.orders.length : 0;
+              const hasOrder = ordersCount > 0;
+              const currentTotal = hasOrder
+                ? t.orders!.reduce((acc, o) => acc + o.total, 0)
+                : 0;
+              const totalItemsCount = hasOrder
+                ? t.orders!.reduce((acc, o) => acc + o.items.length, 0)
+                : 0;
 
               return (
                 <button
                   key={t.id}
                   onClick={() => {
                     setSelectedTableId(t.id);
+                    setSelectedOrderId(t.orders?.[0]?.id || "");
                     setAddonsCart({});
                   }}
                   className={cn(
@@ -538,7 +581,11 @@ export function WaiterAddonsClient({
                     <span
                       className={cn(
                         "w-2 h-2 rounded-full",
-                        t.status === "OCCUPIED" ? "bg-rose-500" : "bg-emerald-500"
+                        t.status === "OCCUPIED"
+                          ? "bg-rose-500"
+                          : t.status === "PARTIALLY_OCCUPIED"
+                          ? "bg-amber-500 animate-pulse"
+                          : "bg-emerald-500"
                       )}
                     />
                   </div>
@@ -548,7 +595,11 @@ export function WaiterAddonsClient({
                   </div>
 
                   <div className="text-[10px] opacity-70">
-                    {hasOrder ? `${currentItemsCount} items placed` : `Cap ${t.capacity}p`}
+                    {ordersCount > 1
+                      ? `${ordersCount} Groups • Shared`
+                      : hasOrder
+                      ? `${totalItemsCount} items placed`
+                      : `Cap ${t.capacity}p`}
                   </div>
                 </button>
               );
@@ -560,10 +611,10 @@ export function WaiterAddonsClient({
       {/* ─── 3. CURRENT TABLE RUNNING SUMMARY & DIRECT REPEAT ──────── */}
       {selectedTable && (
         <div className="bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 rounded-2xl p-3.5 space-y-2.5 shadow-2xs">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center space-x-2">
               <span className="font-black text-sm text-amber-950 dark:text-amber-200">
-                Table {selectedTable.number} Active Tab
+                Table {selectedTable.number} {activeOrder?.partyLabel ? `[Group ${activeOrder.partyLabel}]` : ""} Tab
               </span>
               {activeOrder && (
                 <Badge variant="outline" className="text-[10px] bg-white/80 dark:bg-slate-900/80 text-amber-900 dark:text-amber-300 font-serif font-black">
@@ -583,11 +634,43 @@ export function WaiterAddonsClient({
             )}
           </div>
 
+          {/* Sub-Party Selector for Shared Tables */}
+          {selectedTable.orders && selectedTable.orders.length > 1 && (
+            <div className="pt-2 border-t border-amber-200/60 dark:border-amber-900/50 flex items-center space-x-1.5 overflow-x-auto pb-0.5">
+              <span className="text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-300 shrink-0">
+                Select Group Tab:
+              </span>
+              {selectedTable.orders.map((ord) => {
+                const isSelectedParty =
+                  selectedOrderId === ord.id ||
+                  (!selectedOrderId && selectedTable.orders![0].id === ord.id);
+                return (
+                  <button
+                    key={ord.id}
+                    onClick={() => {
+                      setSelectedOrderId(ord.id);
+                      setAddonsCart({});
+                    }}
+                    className={cn(
+                      "px-3 py-1 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 shrink-0 border",
+                      isSelectedParty
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                        : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-amber-200 dark:border-amber-900/60 hover:bg-amber-100/50"
+                    )}
+                  >
+                    <span>Group {ord.partyLabel || "A"} ({ord.customer?.name || `${ord.guestCount || 1}p`})</span>
+                    <span className="font-serif text-[11px] opacity-85">₹{ord.total.toFixed(0)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Placed Items with 1-Tap Repeat Buttons */}
           {showExistingItems && activeOrder && (
             <div className="pt-2 border-t border-amber-200/60 dark:border-amber-900/50 space-y-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800/80 dark:text-amber-300/80 block">
-                Dishes Already Placed (Tap "+ 1 More" to repeat any dish):
+                Dishes Already Placed for Group {activeOrder.partyLabel || "A"} (Tap "+ 1 More" to repeat):
               </span>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">

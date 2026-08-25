@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { TableStatus } from "@prisma/client";
+export type TableStatus = "AVAILABLE" | "PARTIALLY_OCCUPIED" | "OCCUPIED" | "RESERVED" | "CLEANING" | "OUT_OF_SERVICE";
 import { 
   Users, Armchair, PlusCircle, Edit3, Trash2, CheckCircle2, 
   Phone, Sparkles, RefreshCw, X, ArrowRight,
@@ -193,6 +193,8 @@ export function UnifiedFloorQueueClient({
     switch (status) {
       case "AVAILABLE":
         return <span className="bg-emerald-600 text-white font-bold text-[10px] px-1.5 py-0.5 rounded-md">Available</span>;
+      case "PARTIALLY_OCCUPIED":
+        return <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.5 rounded-md animate-pulse">Shared</span>;
       case "OCCUPIED":
         return <span className="bg-rose-600 text-white font-bold text-[10px] px-1.5 py-0.5 rounded-md">Occupied</span>;
       case "CLEANING":
@@ -211,6 +213,8 @@ export function UnifiedFloorQueueClient({
     switch (status) {
       case "AVAILABLE":
         return "border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-400 text-emerald-950 hover:shadow-sm transition-all";
+      case "PARTIALLY_OCCUPIED":
+        return "border-amber-400 bg-amber-50/70 hover:bg-amber-100/80 hover:border-amber-500 text-amber-950 hover:shadow-sm ring-1 ring-amber-300 transition-all";
       case "OCCUPIED":
         return "border-rose-200 bg-rose-50/70 hover:bg-rose-100/70 hover:border-rose-300 text-rose-950 hover:shadow-sm transition-all";
       case "CLEANING":
@@ -234,14 +238,16 @@ export function UnifiedFloorQueueClient({
       const json = await res.json();
 
       if (json.success) {
-        toast({ title: "Customer Seated", description: "Table marked Occupied." });
-        setTables(prev => prev.map(t => t.id === tableId ? { ...t, status: TableStatus.OCCUPIED } : t));
+        toast({ 
+          title: `Customer Seated: Table ${json.data.table?.number || ""}`, 
+          description: `Assigned as Group ${json.data.partyLabel || "A"}.` 
+        });
         setQueue(prev => prev.filter(q => q.id !== queueId));
         setSelectedTableForAssign(null);
         setSelectedQueueToSeat(null);
         fetchLiveData();
       } else {
-        toast({ variant: "destructive", title: "Failed", description: json.error });
+        toast({ variant: "destructive", title: "Failed to seat", description: json.error });
       }
     } catch (err: any) {
       toast({ variant: "destructive", title: "Error", description: err.message || "Network error" });
@@ -653,7 +659,13 @@ export function UnifiedFloorQueueClient({
     );
   };
 
-  const renderTableCard = (table: RestaurantTable, isHoveredTarget = false) => {
+   const renderTableCard = (table: RestaurantTable, isHoveredTarget = false) => {
+    const occupiedSeats = table.orders ? table.orders.reduce((sum, ord) => sum + (ord.guestCount || 1), 0) : 0;
+    const remainingSeats = Math.max(0, table.capacity - occupiedSeats);
+    const isAvailableForSeating = table.status === "AVAILABLE" || (table.status === "PARTIALLY_OCCUPIED" && remainingSeats > 0);
+    const totalTableBill = table.orders ? table.orders.reduce((sum, o) => sum + (o.total || 0), 0) : 0;
+    const totalTableItems = table.orders ? table.orders.reduce((sum, o) => sum + (o.items?.length || 0), 0) : 0;
+
     return (
       <div
         key={table.id}
@@ -662,7 +674,7 @@ export function UnifiedFloorQueueClient({
           if (isEditMode) e.dataTransfer.setData("text/plain", table.id);
         }}
         onDragOver={(e) => {
-          if (!isEditMode && table.status === "AVAILABLE") {
+          if (!isEditMode && isAvailableForSeating) {
             e.preventDefault();
             e.dataTransfer.dropEffect = "move";
             setDragOverTableId(table.id);
@@ -672,16 +684,16 @@ export function UnifiedFloorQueueClient({
           if (dragOverTableId === table.id) setDragOverTableId(null);
         }}
         onDrop={(e) => {
-          if (!isEditMode && table.status === "AVAILABLE") handleDropToSeat(table.id, e);
+          if (!isEditMode && isAvailableForSeating) handleDropToSeat(table.id, e);
         }}
         onClick={() => {
           if (isEditMode) {
             setEditingTable(table);
-          } else if (selectedQueueToSeat && table.status === "AVAILABLE") {
+          } else if (selectedQueueToSeat && isAvailableForSeating) {
             handleAssignCustomerToTable(table.id, selectedQueueToSeat.id);
           } else if (table.status === "AVAILABLE") {
             setSelectedTableForAssign(table);
-          } else if (table.status === "OCCUPIED" || table.status === "CLEANING" || table.status === "RESERVED") {
+          } else if (table.status === "OCCUPIED" || table.status === "PARTIALLY_OCCUPIED" || table.status === "CLEANING" || table.status === "RESERVED") {
             setSelectedTableForManage(table);
           }
         }}
@@ -710,9 +722,29 @@ export function UnifiedFloorQueueClient({
 
         {/* Middle: Details */}
         <div className="my-auto py-1">
-          {table.status === "OCCUPIED" ? (
+          {table.status === "PARTIALLY_OCCUPIED" ? (
+            <div className="text-[11px] space-y-0.5">
+              <div className="flex items-center justify-between font-bold text-amber-900 dark:text-amber-200">
+                <span>{occupiedSeats}/{table.capacity} Pax</span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold">{remainingSeats} Free</span>
+              </div>
+              <p className="text-[10px] text-slate-500 truncate">
+                {table.orders?.length || 1} Groups • ₹{totalTableBill.toFixed(0)}
+              </p>
+            </div>
+          ) : table.status === "OCCUPIED" ? (
             <div className="text-[11px]">
-              {table.orders && table.orders[0] ? (
+              {table.orders && table.orders.length > 1 ? (
+                <div>
+                  <p className="font-bold text-rose-950 dark:text-rose-200 truncate">
+                    {table.orders.length} Groups Sharing ({occupiedSeats}p)
+                  </p>
+                  <p className="text-[10px] text-slate-500 flex items-center">
+                    <Utensils className="w-2.5 h-2.5 mr-0.5 text-rose-500" />
+                    {totalTableItems} items • ₹{totalTableBill.toFixed(0)}
+                  </p>
+                </div>
+              ) : table.orders && table.orders[0] ? (
                 <div>
                   <p className="font-bold text-rose-950 dark:text-rose-200 truncate">
                     {table.orders[0].customer?.name || "Dine-in"}
@@ -751,19 +783,19 @@ export function UnifiedFloorQueueClient({
           <span className="text-slate-400 font-medium">
             Cap: {table.capacity}
           </span>
-          {table.status === "AVAILABLE" && !isEditMode && (
+          {isAvailableForSeating && !isEditMode && (
             <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center hover:underline">
               Seat <ArrowRight className="w-2.5 h-2.5 ml-0.5" />
             </span>
           )}
           {table.status === "CLEANING" && !isEditMode && (
             <span className="text-amber-800 font-bold bg-amber-200 dark:bg-amber-900/60 dark:text-amber-300 px-1 rounded text-[9px]">
-              Clean
+              Wipe
             </span>
           )}
-          {table.status === "OCCUPIED" && !isEditMode && (
-            <span className="text-rose-700 dark:text-rose-400 font-semibold text-[9px]">
-              Manage
+          {(table.status === "OCCUPIED" || table.status === "PARTIALLY_OCCUPIED") && !isEditMode && (
+            <span className="text-slate-500 font-semibold hover:underline">
+              Manage →
             </span>
           )}
         </div>
@@ -1272,67 +1304,92 @@ export function UnifiedFloorQueueClient({
           </DialogHeader>
 
           <div className="py-3 space-y-3">
-            {selectedTableForManage?.status === "OCCUPIED" && (
-              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-900/50 text-xs space-y-2">
-                <div className="flex items-center justify-between pb-1.5 border-b border-rose-200/70 dark:border-rose-900/50">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500 block">Customer</span>
-                    <p className="font-extrabold text-sm text-rose-950 dark:text-rose-200">
-                      {selectedTableForManage.orders && selectedTableForManage.orders[0]?.customer?.name 
-                        ? selectedTableForManage.orders[0].customer.name 
-                        : "Walk-In Guest"}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500 block">Live Bill</span>
-                    <p className="font-extrabold text-sm text-rose-950 dark:text-rose-200 font-serif">
-                      ₹{selectedTableForManage.orders && selectedTableForManage.orders[0] ? selectedTableForManage.orders[0].total : 0}
-                    </p>
-                  </div>
-                </div>
-
-                {/* List of Ordered Dishes */}
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 block mb-1">
-                    Ordered Dishes ({selectedTableForManage.orders && selectedTableForManage.orders[0]?.items ? selectedTableForManage.orders[0].items.reduce((acc: number, i: any) => acc + (i.quantity || 1), 0) : 0} items)
-                  </span>
-
-                  {selectedTableForManage.orders && selectedTableForManage.orders[0]?.items && selectedTableForManage.orders[0].items.length > 0 ? (
-                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
-                      {selectedTableForManage.orders[0].items.map((item: any, idx: number) => (
-                        <div key={item.id || idx} className="flex items-center justify-between bg-white dark:bg-slate-900/80 p-1.5 px-2 rounded-lg border border-rose-100 dark:border-rose-900/30">
-                          <div className="flex items-center space-x-1.5 flex-1 truncate">
-                            <span className="bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200 font-black text-[10px] px-1.5 py-0.5 rounded">
-                              {item.quantity}x
-                            </span>
-                            <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate">
-                              {item.menuItem?.name || item.name || "Dish Item"}
-                            </span>
-                            {item.specialInstructions && (
-                              <span className="italic text-[10px] text-amber-600 dark:text-amber-400 truncate">
-                                ({item.specialInstructions})
-                              </span>
-                            )}
-                          </div>
-                          <span className="font-bold text-xs text-rose-700 dark:text-rose-300 font-serif shrink-0 ml-2">
-                            ₹{item.price * item.quantity}
+            {(selectedTableForManage?.status === "OCCUPIED" || selectedTableForManage?.status === "PARTIALLY_OCCUPIED") && (
+              <div className="space-y-2.5">
+                {selectedTableForManage.orders && selectedTableForManage.orders.length > 0 ? (
+                  selectedTableForManage.orders.map((ord: any, ordIdx: number) => (
+                    <div key={ord.id || ordIdx} className="p-3 bg-rose-50/80 dark:bg-rose-950/40 rounded-xl border border-rose-200 dark:border-rose-900/50 text-xs space-y-2">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-rose-200/70 dark:border-rose-900/50">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500 block">
+                            Group {ord.partyLabel || "A"} • {ord.guestCount || 1} Pax
                           </span>
+                          <p className="font-extrabold text-sm text-rose-950 dark:text-rose-200">
+                            {ord.customer?.name || ord.groupName || "Dine-In Guest"}
+                          </p>
                         </div>
-                      ))}
+                        <div className="text-right">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500 block">Live Bill</span>
+                          <p className="font-extrabold text-sm text-rose-950 dark:text-rose-200 font-serif">
+                            ₹{ord.total ? ord.total.toFixed(0) : 0}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* List of Ordered Dishes */}
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 block mb-1">
+                          Ordered Dishes ({ord.items ? ord.items.reduce((acc: number, i: any) => acc + (i.quantity || 1), 0) : 0} items)
+                        </span>
+
+                        {ord.items && ord.items.length > 0 ? (
+                          <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+                            {ord.items.map((item: any, idx: number) => (
+                              <div key={item.id || idx} className="flex items-center justify-between bg-white dark:bg-slate-900/80 p-1.5 px-2 rounded-lg border border-rose-100 dark:border-rose-900/30">
+                                <div className="flex items-center space-x-1.5 flex-1 truncate">
+                                  <span className="bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200 font-black text-[10px] px-1.5 py-0.5 rounded">
+                                    {item.quantity}x
+                                  </span>
+                                  <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate">
+                                    {item.menuItem?.name || item.name || "Dish Item"}
+                                  </span>
+                                  {item.specialInstructions && (
+                                    <span className="italic text-[10px] text-amber-600 dark:text-amber-400 truncate">
+                                      ({item.specialInstructions})
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="font-bold text-xs text-rose-700 dark:text-rose-300 font-serif shrink-0 ml-2">
+                                  ₹{item.price * item.quantity}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-rose-800/80 dark:text-rose-300 italic py-1">
+                            Group seated • No dishes ordered yet.
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-[11px] text-rose-800/80 dark:text-rose-300 italic py-1">
-                      Customer is seated • No dishes ordered yet.
-                    </p>
-                  )}
-                </div>
+                  ))
+                ) : (
+                  <div className="p-3 bg-amber-50 rounded-xl text-center text-xs text-amber-800">
+                    Seated table with no active orders yet.
+                  </div>
+                )}
+
+                {/* Seat Sharing Party Action if capacity remains */}
+                {selectedTableForManage.status === "PARTIALLY_OCCUPIED" && (
+                  <Button
+                    onClick={() => {
+                      const t = selectedTableForManage;
+                      setSelectedTableForManage(null);
+                      setSelectedTableForAssign(t);
+                    }}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 font-bold rounded-xl shadow-xs flex items-center justify-center space-x-1"
+                  >
+                    <Users className="w-3.5 h-3.5 mr-1" />
+                    <span>+ Seat Another Group (Share Table)</span>
+                  </Button>
+                )}
               </div>
             )}
 
             <div className="space-y-2">
               <Label className="text-[10px] font-semibold uppercase text-slate-500">Quick Actions</Label>
               
-              {selectedTableForManage?.status === "OCCUPIED" && (
+              {(selectedTableForManage?.status === "OCCUPIED" || selectedTableForManage?.status === "PARTIALLY_OCCUPIED") && (
                 <div className="grid grid-cols-2 gap-2">
                   <Link href={`/staff/addons?tableId=${selectedTableForManage.id}`} className="block w-full">
                     <Button className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs h-9 font-black rounded-xl shadow-xs flex items-center justify-center">
@@ -1350,12 +1407,12 @@ export function UnifiedFloorQueueClient({
               )}
 
               <div className="grid grid-cols-2 gap-2">
-                {selectedTableForManage?.status === "OCCUPIED" && (
+                {(selectedTableForManage?.status === "OCCUPIED" || selectedTableForManage?.status === "PARTIALLY_OCCUPIED") && (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => selectedTableForManage && handleUpdateTableStatus(selectedTableForManage.id, TableStatus.CLEANING)}
+                      onClick={() => selectedTableForManage && handleUpdateTableStatus(selectedTableForManage.id, "CLEANING")}
                       disabled={loadingAction}
                       className="border-amber-300 text-amber-900 hover:bg-amber-50 text-xs h-8"
                     >
@@ -1365,7 +1422,7 @@ export function UnifiedFloorQueueClient({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => selectedTableForManage && handleUpdateTableStatus(selectedTableForManage.id, TableStatus.AVAILABLE)}
+                      onClick={() => selectedTableForManage && handleUpdateTableStatus(selectedTableForManage.id, "AVAILABLE")}
                       disabled={loadingAction}
                       className="border-emerald-300 text-emerald-900 hover:bg-emerald-50 text-xs h-8"
                     >
@@ -1378,7 +1435,7 @@ export function UnifiedFloorQueueClient({
                 {selectedTableForManage?.status === "CLEANING" && (
                   <Button
                     size="sm"
-                    onClick={() => selectedTableForManage && handleUpdateTableStatus(selectedTableForManage.id, TableStatus.AVAILABLE)}
+                    onClick={() => selectedTableForManage && handleUpdateTableStatus(selectedTableForManage.id, "AVAILABLE")}
                     disabled={loadingAction}
                     className="col-span-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8"
                   >

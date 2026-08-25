@@ -38,6 +38,9 @@ export type MenuCategory = {
 export type TableOrder = {
   id: string;
   status: string;
+  partyLabel?: string | null;
+  guestCount?: number | null;
+  groupName?: string | null;
   total: number;
   subtotal: number;
   tax: number;
@@ -56,7 +59,7 @@ export type Table = {
   number: string;
   capacity: number;
   location?: string | null;
-  status: "AVAILABLE" | "OCCUPIED" | "RESERVED" | "CLEANING" | "OUT_OF_SERVICE";
+  status: "AVAILABLE" | "PARTIALLY_OCCUPIED" | "OCCUPIED" | "RESERVED" | "CLEANING" | "OUT_OF_SERVICE";
   orders?: TableOrder[];
 };
 
@@ -92,6 +95,9 @@ export function WaiterPosClient({
   const [selectedTableId, setSelectedTableId] = useState<string>(
     initialTables[0]?.id || ""
   );
+  const [selectedOrderId, setSelectedOrderId] = useState<string>(
+    initialTables[0]?.orders?.[0]?.id || ""
+  );
 
   // Cart state: { [menuItemId]: CartItem }
   const [cart, setCart] = useState<Record<string, CartItem>>({});
@@ -115,7 +121,13 @@ export function WaiterPosClient({
     return tables.find((t) => t.id === selectedTableId) || null;
   }, [tables, selectedTableId]);
 
-  const activeTableOrder = selectedTable?.orders && selectedTable.orders[0];
+  const activeTableOrder = useMemo(() => {
+    if (!selectedTable?.orders || selectedTable.orders.length === 0) return null;
+    if (selectedOrderId) {
+      return selectedTable.orders.find((o) => o.id === selectedOrderId) || selectedTable.orders[0];
+    }
+    return selectedTable.orders[0];
+  }, [selectedTable, selectedOrderId]);
 
   const allItems = useMemo(() => {
     return categories.flatMap((c) => c.items);
@@ -203,6 +215,9 @@ export function WaiterPosClient({
       const payload = {
         restaurantId: restaurant.id,
         tableId: selectedTable.id,
+        orderId: activeTableOrder?.id,
+        partyLabel: activeTableOrder?.partyLabel || "A",
+        guestCount: activeTableOrder?.guestCount || 1,
         type: "DINE_IN",
         items: cartEntries.map((e) => ({
           menuItemId: e.menuItem.id,
@@ -220,14 +235,33 @@ export function WaiterPosClient({
       const json = await res.json();
 
       if (json.success) {
-        // Update local table status to OCCUPIED and append items
+        // Update local table orders and status
         setTables((prev) =>
           prev.map((t) => {
             if (t.id === selectedTable.id) {
-              const updatedOrders = [json.data];
+              const existingOrders = t.orders || [];
+              const orderIndex = existingOrders.findIndex((o) => o.id === json.data.id);
+              let updatedOrders: TableOrder[];
+              if (orderIndex >= 0) {
+                updatedOrders = existingOrders.map((o) =>
+                  o.id === json.data.id ? json.data : o
+                );
+              } else {
+                updatedOrders = [json.data, ...existingOrders];
+              }
+
+              const totalOccupiedSeats = updatedOrders.reduce(
+                (sum, o) => sum + (o.guestCount || 1),
+                0
+              );
+              const nextStatus =
+                totalOccupiedSeats >= t.capacity
+                  ? "OCCUPIED"
+                  : "PARTIALLY_OCCUPIED";
+
               return {
                 ...t,
-                status: "OCCUPIED",
+                status: nextStatus,
                 orders: updatedOrders,
               };
             }
@@ -238,7 +272,7 @@ export function WaiterPosClient({
         setCart({});
         setIsMobileCartOpen(false);
         toast({
-          title: `🔥 KOT Dispatched for Table ${selectedTable.number}`,
+          title: `🔥 KOT Dispatched: Table ${selectedTable.number} [Group ${activeTableOrder?.partyLabel || "A"}]`,
           description: `${cartItemsCount} item(s) sent directly to kitchen display.`,
         });
       } else {
@@ -286,74 +320,116 @@ export function WaiterPosClient({
   return (
     <div className="space-y-3 pb-24 lg:pb-6">
       {/* ─── TOP BAR: TABLE SELECTOR & WAITER PROFILE ─────────────── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Table Selector */}
-        <div className="flex items-center space-x-3 flex-1">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 flex items-center justify-center font-black shrink-0">
-            <Armchair className="w-5 h-5" />
-          </div>
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Table Selector */}
+          <div className="flex items-center space-x-3 flex-1">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 flex items-center justify-center font-black shrink-0">
+              <Armchair className="w-5 h-5" />
+            </div>
 
-          <div className="flex-1">
-            <div className="flex items-center space-x-2">
-              <label className="text-[10px] uppercase font-bold text-slate-400">
-                Active Table:
-              </label>
-              {selectedTable && (
-                <Badge
-                  variant={
-                    selectedTable.status === "AVAILABLE"
-                      ? "outline"
-                      : "secondary"
-                  }
-                  className={cn(
-                    "text-[10px] px-1.5 py-0 font-bold",
-                    selectedTable.status === "AVAILABLE"
-                      ? "text-emerald-600 border-emerald-300 dark:text-emerald-400"
-                      : "text-rose-600 bg-rose-50 dark:bg-rose-950/50"
-                  )}
+            <div className="flex-1">
+              <div className="flex items-center space-x-2">
+                <label className="text-[10px] uppercase font-bold text-slate-400">
+                  Active Table:
+                </label>
+                {selectedTable && (
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "text-[10px] px-1.5 py-0 font-bold",
+                      selectedTable.status === "AVAILABLE"
+                        ? "text-emerald-700 bg-emerald-50 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        : selectedTable.status === "PARTIALLY_OCCUPIED"
+                        ? "text-amber-700 bg-amber-50 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300"
+                        : "text-rose-700 bg-rose-50 border-rose-300 dark:bg-rose-950/50 dark:text-rose-300"
+                    )}
+                  >
+                    {selectedTable.status.replace("_", " ")}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="relative mt-0.5">
+                <select
+                  value={selectedTableId}
+                  onChange={(e) => {
+                    const nextTId = e.target.value;
+                    setSelectedTableId(nextTId);
+                    const nextTable = tables.find((t) => t.id === nextTId);
+                    setSelectedOrderId(nextTable?.orders?.[0]?.id || "");
+                    setCart({});
+                  }}
+                  className="w-full sm:w-72 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-3 py-1.5 text-sm font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                 >
-                  {selectedTable.status}
-                </Badge>
-              )}
-            </div>
-
-            <div className="relative mt-0.5">
-              <select
-                value={selectedTableId}
-                onChange={(e) => {
-                  setSelectedTableId(e.target.value);
-                  setCart({});
-                }}
-                className="w-full sm:w-64 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-3 py-1.5 text-sm font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-              >
-                {tables.map((t) => {
-                  const hasOrder = t.orders && t.orders.length > 0;
-                  return (
-                    <option key={t.id} value={t.id}>
-                      Table {t.number} ({t.capacity}p) - {t.status}
-                      {hasOrder ? ` • Live ₹${t.orders![0].total}` : ""}
-                    </option>
-                  );
-                })}
-              </select>
+                  {tables.map((t) => {
+                    const ordersCount = t.orders ? t.orders.length : 0;
+                    const totalBill = t.orders
+                      ? t.orders.reduce((acc, o) => acc + o.total, 0)
+                      : 0;
+                    return (
+                      <option key={t.id} value={t.id}>
+                        Table {t.number} ({t.capacity}p) • {t.status.replace("_", " ")}
+                        {ordersCount > 1
+                          ? ` • Shared (${ordersCount} Groups - Total ₹${totalBill})`
+                          : ordersCount === 1
+                          ? ` • Live ₹${totalBill}`
+                          : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
           </div>
+
+          {/* Current Party Running Tab Indicator */}
+          {activeTableOrder && (
+            <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl px-3 py-1.5 flex items-center justify-between sm:justify-end gap-3 text-xs">
+              <div>
+                <span className="text-[10px] font-bold text-rose-600 uppercase block">
+                  Group {activeTableOrder.partyLabel || "A"} Bill
+                </span>
+                <span className="font-black text-rose-950 dark:text-rose-200 font-serif text-sm">
+                  ₹{activeTableOrder.total.toFixed(2)}
+                </span>
+              </div>
+              <Badge className="bg-rose-600 text-[10px]">
+                {activeTableOrder.items.length} Placed Items
+              </Badge>
+            </div>
+          )}
         </div>
 
-        {/* Current Table Running Tab Indicator */}
-        {activeTableOrder && (
-          <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl px-3 py-1.5 flex items-center justify-between sm:justify-end gap-3 text-xs">
-            <div>
-              <span className="text-[10px] font-bold text-rose-600 uppercase block">
-                Current Table Bill
-              </span>
-              <span className="font-black text-rose-950 dark:text-rose-200 font-serif text-sm">
-                ₹{activeTableOrder.total.toFixed(2)}
-              </span>
-            </div>
-            <Badge className="bg-rose-600 text-[10px]">
-              {activeTableOrder.items.length} Active Items
-            </Badge>
+        {/* Sub-Party Tabs for Shared Tables */}
+        {selectedTable?.orders && selectedTable.orders.length > 1 && (
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center space-x-2 overflow-x-auto">
+            <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 shrink-0">
+              Shared Groups on Table {selectedTable.number}:
+            </span>
+            {selectedTable.orders.map((ord) => {
+              const isSelectedParty =
+                selectedOrderId === ord.id ||
+                (!selectedOrderId && selectedTable.orders![0].id === ord.id);
+              return (
+                <button
+                  key={ord.id}
+                  onClick={() => {
+                    setSelectedOrderId(ord.id);
+                    setCart({});
+                  }}
+                  className={cn(
+                    "px-3 py-1 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 shrink-0 border",
+                    isSelectedParty
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200"
+                  )}
+                >
+                  <span>Group {ord.partyLabel || "A"} ({ord.customer?.name || `${ord.guestCount || 1}p`})</span>
+                  <span className="font-serif text-[11px] opacity-80">₹{ord.total.toFixed(0)}</span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

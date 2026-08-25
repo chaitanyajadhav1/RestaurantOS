@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PlusCircle, Edit, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TableStatus } from "@prisma/client";
+export type TableStatus = "AVAILABLE" | "PARTIALLY_OCCUPIED" | "OCCUPIED" | "RESERVED" | "CLEANING" | "OUT_OF_SERVICE";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -46,6 +46,7 @@ export function AdminTablesClient({
   const getStatusColor = (status: TableStatus) => {
     switch (status) {
       case "AVAILABLE": return "default";
+      case "PARTIALLY_OCCUPIED": return "secondary";
       case "OCCUPIED": return "destructive";
       case "RESERVED": return "secondary";
       case "CLEANING": return "outline";
@@ -57,6 +58,7 @@ export function AdminTablesClient({
   const getGridColor = (status: TableStatus) => {
     switch (status) {
       case "AVAILABLE": return "bg-green-100 text-green-800 border-green-300";
+      case "PARTIALLY_OCCUPIED": return "bg-amber-100 text-amber-900 border-amber-400 ring-1 ring-amber-300";
       case "OCCUPIED": return "bg-red-100 text-red-800 border-red-300";
       case "RESERVED": return "bg-yellow-100 text-yellow-800 border-yellow-300";
       case "CLEANING": return "bg-orange-100 text-orange-800 border-orange-300";

@@ -69,6 +69,7 @@ model Customer {
 
 enum TableStatus {
   AVAILABLE
+  PARTIALLY_OCCUPIED
   OCCUPIED
   RESERVED
   CLEANING
@@ -162,6 +163,9 @@ model Order {
   tableId       String?
   customerId    String?
   queueId       String?
+  partyLabel    String      @default("A") // "A", "B", "C", "D"
+  guestCount    Int         @default(1)   // Number of seats occupied by this group
+  groupName     String?                   // Optional group/family name (e.g. "Sharma Party")
   status        OrderStatus @default(PLACED)
   type          String      // DINE_IN, TAKEAWAY
   subtotal      Float
