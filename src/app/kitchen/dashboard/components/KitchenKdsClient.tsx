@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { 
   Clock, ChefHat, CheckCircle2, Play, Utensils, 
   Sparkles, RefreshCw, Bell, Search, AlertCircle, Check, 
-  ArrowRight, Layers, Volume2, VolumeX, Package, BellRing, Settings2, Globe
+  ArrowRight, Layers, Volume2, VolumeX, Package, BellRing, Settings2, Globe, Mic, MicOff, MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -73,8 +73,11 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
   const [voiceLanguage, setVoiceLanguage] = useState<"mr" | "hi" | "en">("mr"); // Default to Marathi
   const [isReminderEnabled, setIsReminderEnabled] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+  
   const announcedOrderIdsRef = useRef<Set<string>>(new Set(initialOrders.map(o => o.id)));
   const lastReminderTimeRef = useRef<number>(Date.now());
+  const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
 
   // Load language preference from localStorage
@@ -156,6 +159,126 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
       console.error("Speech synthesis error:", err);
     }
   }, [voiceLanguage]);
+
+  // ====================================================
+  // READ OUT CURRENT ORDERS IN QUEUE ALOUD
+  // ====================================================
+  const readOutCurrentOrdersQueue = useCallback(() => {
+    const activeOrders = orders.filter(o => o.status !== "COMPLETED");
+    if (activeOrders.length === 0) {
+      const emptyMsg = {
+        mr: "सध्या किचनमध्ये कोणतीही पेंडिंग ऑर्डर नाही. सर्व ऑर्डर्स पूर्ण झाल्या आहेत!",
+        hi: "वर्तमान में किचन में कोई पेंडिंग आर्डर नहीं है। सभी आर्डर्स पूरे हो चुके हैं!",
+        en: "There are currently no pending orders in the queue. The kitchen is all clear!"
+      };
+      speakCustomText(emptyMsg[voiceLanguage]);
+      toast({ title: "📢 " + emptyMsg[voiceLanguage] });
+      return;
+    }
+
+    let text = "";
+
+    if (voiceLanguage === "mr") {
+      text = `सध्या किचनमध्ये एकूण ${activeOrders.length} ऑर्डर्स चालू आहेत. `;
+      activeOrders.forEach((o, index) => {
+        const isParcel = o.type === "TAKEAWAY";
+        const target = isParcel ? (o.groupName || "पार्सल") : `टेबल ${o.table?.number || ""}`;
+        const statusLabel = o.status === "READY" ? "तयार आहे" : o.status === "PREPARING" ? "बनत आहे" : "नवीन ऑर्डर";
+        const items = o.items.map(i => `${i.quantity} ${i.menuItem?.name}`).join(", ");
+        text += `ऑर्डर ${index + 1}: ${target}, स्थिती: ${statusLabel}. पदार्थ: ${items}. `;
+      });
+    } else if (voiceLanguage === "hi") {
+      text = `वर्तमान में किचन में कुल ${activeOrders.length} आर्डर्स हैं। `;
+      activeOrders.forEach((o, index) => {
+        const isParcel = o.type === "TAKEAWAY";
+        const target = isParcel ? (o.groupName || "पार्सल") : `टेबल ${o.table?.number || ""}`;
+        const statusLabel = o.status === "READY" ? "तैयार है" : o.status === "PREPARING" ? "बन रहा है" : "नया आर्डर";
+        const items = o.items.map(i => `${i.quantity} ${i.menuItem?.name}`).join(", ");
+        text += `आर्डर ${index + 1}: ${target}, स्थिति: ${statusLabel}. आइटम्स: ${items}। `;
+      });
+    } else {
+      text = `Currently there are ${activeOrders.length} active orders in the queue. `;
+      activeOrders.forEach((o, index) => {
+        const isParcel = o.type === "TAKEAWAY";
+        const target = isParcel ? (o.groupName || "Parcel") : `Table ${o.table?.number || ""}`;
+        const statusLabel = o.status === "READY" ? "Ready" : o.status === "PREPARING" ? "Cooking" : "New Order";
+        const items = o.items.map(i => `${i.quantity} ${i.menuItem?.name}`).join(", ");
+        text += `Order ${index + 1}: ${target}, status: ${statusLabel}. Items: ${items}. `;
+      });
+    }
+
+    speakCustomText(text);
+    toast({ title: `📢 Reading out ${activeOrders.length} active orders in queue...` });
+  }, [orders, voiceLanguage, speakCustomText, toast]);
+
+  // ====================================================
+  // MICROPHONE VOICE COMMAND LISTENER (Speech Recognition)
+  // ====================================================
+  const startVoiceListening = useCallback(() => {
+    const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognitionClass) {
+      // Fallback if browser does not support mic recognition: directly read out orders
+      readOutCurrentOrdersQueue();
+      return;
+    }
+
+    if (isListening) {
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognitionClass();
+      recognitionRef.current = recognition;
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      if (voiceLanguage === "mr") {
+        recognition.lang = "mr-IN";
+      } else if (voiceLanguage === "hi") {
+        recognition.lang = "hi-IN";
+      } else {
+        recognition.lang = "en-IN";
+      }
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        toast({ 
+          title: "🎙️ Listening to Chef...", 
+          description: voiceLanguage === "mr" ? "विचारा: 'काय ऑर्डर्स आहेत?'" : "Ask: 'What are the current orders in queue?'" 
+        });
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        toast({ title: `🗣️ Voice Command: "${transcript}"` });
+        
+        // Process speech and give orders list
+        readOutCurrentOrdersQueue();
+      };
+
+      recognition.onerror = (event: any) => {
+        setIsListening(false);
+        if (event.error === "no-speech" || event.error === "network") {
+          // If no speech detected, still give the response for convenience
+          readOutCurrentOrdersQueue();
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.error("Speech recognition error:", err);
+      readOutCurrentOrdersQueue();
+    }
+  }, [isListening, voiceLanguage, readOutCurrentOrdersQueue, toast]);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -594,8 +717,31 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
           </button>
         </div>
 
-        {/* Right: AI Voice Controls, Language Selector, Search & Sync */}
+        {/* Right: Two-way Voice Microphone, Language, Search & Sync */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* TWO-WAY VOICE QUERY BUTTON ("Ask: What are current orders in queue?") */}
+          <Button
+            onClick={startVoiceListening}
+            className={cn(
+              "h-9 px-3 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-xs active:scale-95",
+              isListening
+                ? "bg-rose-600 hover:bg-rose-700 text-white animate-pulse"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+            )}
+            title="Ask Voice Assistant: 'What are the current orders in queue?'"
+          >
+            <Mic className={cn("w-4 h-4", isListening && "animate-bounce")} />
+            <span>
+              {isListening
+                ? "Listening..."
+                : voiceLanguage === "mr"
+                ? "🎙️ ऑर्डर्स विचारा"
+                : voiceLanguage === "hi"
+                ? "🎙️ आर्डर्स पूछें"
+                : "🎙️ Ask Orders"}
+            </span>
+          </Button>
+
           {/* Language Selector (Marathi, Hindi, English) */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl gap-0.5 shrink-0 border border-slate-200/80 dark:border-slate-800">
             <Globe className="w-3.5 h-3.5 text-slate-400 ml-1.5 mr-0.5" />
