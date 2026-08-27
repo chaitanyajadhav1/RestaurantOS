@@ -30,5 +30,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "customer-app"]
+  "exclude": ["node_modules", "customer-app", "restaurant-os-app"]
 }
