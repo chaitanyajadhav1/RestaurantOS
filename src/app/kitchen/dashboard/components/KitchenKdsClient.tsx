@@ -35,6 +35,34 @@ type Order = {
   items: OrderItem[];
 };
 
+// Convert Marathi/Hindi numerals and number words to standard digits
+function normalizeNumbers(input: string): string {
+  let text = input.toLowerCase();
+
+  const marathiDigits: Record<string, string> = {
+    '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
+    '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
+  };
+
+  for (const [mDigit, sDigit] of Object.entries(marathiDigits)) {
+    text = text.replaceAll(mDigit, sDigit);
+  }
+
+  const numberWords: Record<string, string> = {
+    'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5',
+    'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10',
+    'एक': '1', 'दोन': '2', 'तीन': '3', 'चार': '4', 'पाच': '5',
+    'सहा': '6', 'सात': '7', 'आठ': '8', 'नऊ': '9', 'दहा': '10'
+  };
+
+  for (const [word, digit] of Object.entries(numberWords)) {
+    const regex = new RegExp(`\\b${word}\\b`, 'g');
+    text = text.replace(regex, digit);
+  }
+
+  return text;
+}
+
 // Play pleasant web audio double-tone chime before speaking
 function playKitchenChime() {
   try {
@@ -160,6 +188,25 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
     }
   }, [voiceLanguage]);
 
+  const updateStatus = useCallback(async (id: string, status: string, customNotification?: string) => {
+    try {
+      const res = await fetch(`/api/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status })
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast({ title: customNotification || `Ticket updated to ${status.replace('_', ' ')}` });
+        fetchOrders();
+      } else {
+        toast({ variant: "destructive", title: "Error", description: json.error });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "Network error" });
+    }
+  }, []);
+
   // ====================================================
   // READ OUT CURRENT ORDERS IN QUEUE ALOUD
   // ====================================================
@@ -212,6 +259,135 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
   }, [orders, voiceLanguage, speakCustomText, toast]);
 
   // ====================================================
+  // AI VOICE COMMAND PROCESSOR (Specific Order & Status Changes)
+  // ====================================================
+  const processVoiceCommand = useCallback((rawTranscript: string) => {
+    const transcript = normalizeNumbers(rawTranscript);
+    const activeOrders = orders.filter(o => o.status !== "COMPLETED");
+
+    // 1. Check for Order Status Action: START COOKING / PREPARING
+    const isStartCooking = 
+      transcript.includes("start") || 
+      transcript.includes("cook") || 
+      transcript.includes("सुरू") || 
+      transcript.includes("बनवा") || 
+      transcript.includes("चालू") ||
+      transcript.includes("बनाओ");
+
+    // 2. Check for Order Status Action: MARK READY
+    const isMarkReady = 
+      transcript.includes("ready") || 
+      transcript.includes("तयार") || 
+      transcript.includes("तैयार") ||
+      transcript.includes("झाले") ||
+      transcript.includes("झाली");
+
+    // 3. Check for Order Status Action: MARK COMPLETED / SERVED / HANDED OVER
+    const isMarkCompleted = 
+      transcript.includes("complete") || 
+      transcript.includes("served") || 
+      transcript.includes("done") || 
+      transcript.includes("दिले") || 
+      transcript.includes("दिला") ||
+      transcript.includes("दे दिया");
+
+    // Try finding specific target order (by table number, parcel token, or customer name)
+    const targetOrder = activeOrders.find(o => {
+      // Table matching
+      if (o.table?.number) {
+        const tNum = o.table.number.toLowerCase();
+        if (transcript.includes(`table ${tNum}`) || transcript.includes(`टेबल ${tNum}`) || transcript.includes(` ${tNum}`)) {
+          return true;
+        }
+      }
+      // Parcel token / name matching
+      if (o.groupName) {
+        const group = o.groupName.toLowerCase();
+        // Check "P-101" or "101" or customer name
+        const cleanToken = group.replace(/[^a-z0-9]/gi, '');
+        if (transcript.includes(group) || (cleanToken && transcript.includes(cleanToken))) {
+          return true;
+        }
+      }
+      if (o.customer?.name) {
+        const cName = o.customer.name.toLowerCase();
+        if (transcript.includes(cName)) return true;
+      }
+      return false;
+    });
+
+    // --- CASE A: ACTION ON MATCHED ORDER ---
+    if (targetOrder) {
+      const orderLabel = targetOrder.type === "TAKEAWAY" 
+        ? (targetOrder.groupName || "पार्सल") 
+        : `टेबल ${targetOrder.table?.number || ""}`;
+
+      if (isStartCooking) {
+        updateStatus(targetOrder.id, "PREPARING");
+        const reply = {
+          mr: `${orderLabel} चे जेवण बनवणे सुरू केले आहे! 👨‍🍳`,
+          hi: `${orderLabel} का खाना बनाना शुरू कर दिया गया है! 👨‍🍳`,
+          en: `Started cooking for ${orderLabel}! 👨‍🍳`
+        };
+        speakCustomText(reply[voiceLanguage]);
+        return;
+      }
+
+      if (isMarkReady) {
+        updateStatus(targetOrder.id, "READY");
+        const reply = {
+          mr: `${orderLabel} ची ऑर्डर तयार झाली आहे, पॅक किंवा सर्व्ह करण्यासाठी सज्ज! 🛎️`,
+          hi: `${orderLabel} का आर्डर तैयार हो गया है! 🛎️`,
+          en: `${orderLabel} order is marked ready for service! 🛎️`
+        };
+        speakCustomText(reply[voiceLanguage]);
+        return;
+      }
+
+      if (isMarkCompleted) {
+        updateStatus(targetOrder.id, "COMPLETED");
+        const reply = {
+          mr: `${orderLabel} ची ऑर्डर पूर्ण झाली आहे! ✅`,
+          hi: `${orderLabel} का आर्डर पूरा हो गया है! ✅`,
+          en: `${orderLabel} order is completed! ✅`
+        };
+        speakCustomText(reply[voiceLanguage]);
+        return;
+      }
+
+      // If just asking about this specific order's items:
+      const itemsList = targetOrder.items.map(i => `${i.quantity} ${i.menuItem?.name}`).join(", ");
+      const statusStr = targetOrder.status === "READY" ? "तयार आहे" : targetOrder.status === "PREPARING" ? "बनत आहे" : "नवीन ऑर्डर";
+      const reply = {
+        mr: `${orderLabel} ची ऑर्डर: ${itemsList}. स्थिती: ${statusStr}.`,
+        hi: `${orderLabel} का आर्डर: ${itemsList}. स्थिति: ${statusStr}.`,
+        en: `Order for ${orderLabel}: ${itemsList}. Current status: ${targetOrder.status}.`
+      };
+      speakCustomText(reply[voiceLanguage]);
+      return;
+    }
+
+    // --- CASE B: GENERIC "START COOKING FIRST PARCEL" (if table wasn't numbered) ---
+    if (isStartCooking && (transcript.includes("parcel") || transcript.includes("पार्सल"))) {
+      const firstNewParcel = activeOrders.find(o => o.type === "TAKEAWAY" && (o.status === "PLACED" || o.status === "CONFIRMED"));
+      if (firstNewParcel) {
+        updateStatus(firstNewParcel.id, "PREPARING");
+        const target = firstNewParcel.groupName || "पार्सल";
+        const reply = {
+          mr: `${target} चे जेवण बनवणे सुरू केले आहे! 👨‍🍳`,
+          hi: `${target} का खाना बनाना शुरू कर दिया गया है! 👨‍🍳`,
+          en: `Started cooking for ${target}! 👨‍🍳`
+        };
+        speakCustomText(reply[voiceLanguage]);
+        return;
+      }
+    }
+
+    // --- CASE C: GENERAL QUEUE INQUIRY OR FALLBACK ---
+    readOutCurrentOrdersQueue();
+  }, [orders, voiceLanguage, updateStatus, speakCustomText, readOutCurrentOrdersQueue]);
+
+  // ====================================================
   // MICROPHONE VOICE COMMAND LISTENER (Speech Recognition)
   // ====================================================
   const startVoiceListening = useCallback(() => {
@@ -249,7 +425,9 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
         setIsListening(true);
         toast({ 
           title: "🎙️ Listening to Chef...", 
-          description: voiceLanguage === "mr" ? "विचारा: 'काय ऑर्डर्स आहेत?'" : "Ask: 'What are the current orders in queue?'" 
+          description: voiceLanguage === "mr" 
+            ? "उदा. 'टेबल ४ सुरू करा' किंवा 'काय ऑर्डर्स आहेत?'" 
+            : "E.g. 'Start cooking Table 4' or 'What are current orders?'" 
         });
       };
 
@@ -257,14 +435,14 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
         const transcript = event.results[0][0].transcript;
         toast({ title: `🗣️ Voice Command: "${transcript}"` });
         
-        // Process speech and give orders list
-        readOutCurrentOrdersQueue();
+        // Process natural voice command
+        processVoiceCommand(transcript);
       };
 
       recognition.onerror = (event: any) => {
         setIsListening(false);
         if (event.error === "no-speech" || event.error === "network") {
-          // If no speech detected, still give the response for convenience
+          // If no speech detected, give default queue summary
           readOutCurrentOrdersQueue();
         }
       };
@@ -278,7 +456,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
       console.error("Speech recognition error:", err);
       readOutCurrentOrdersQueue();
     }
-  }, [isListening, voiceLanguage, readOutCurrentOrdersQueue, toast]);
+  }, [isListening, voiceLanguage, processVoiceCommand, readOutCurrentOrdersQueue, toast]);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -427,25 +605,6 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
 
     return () => clearInterval(reminderInterval);
   }, [isVoiceEnabled, isReminderEnabled, orders, voiceLanguage, speakCustomText]);
-
-  const updateStatus = async (id: string, status: string) => {
-    try {
-      const res = await fetch(`/api/orders/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status })
-      });
-      const json = await res.json();
-      if (json.success) {
-        toast({ title: `Ticket updated to ${status.replace('_', ' ')}` });
-        fetchOrders();
-      } else {
-        toast({ variant: "destructive", title: "Error", description: json.error });
-      }
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Network error" });
-    }
-  };
 
   const handleTestVoice = () => {
     let testMsg = "Kitchen Voice Assistant is online and ready for incoming orders!";
@@ -719,7 +878,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
 
         {/* Right: Two-way Voice Microphone, Language, Search & Sync */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* TWO-WAY VOICE QUERY BUTTON ("Ask: What are current orders in queue?") */}
+          {/* TWO-WAY VOICE COMMAND BUTTON ("Ask or Command: Start Table 4 / What is queue?") */}
           <Button
             onClick={startVoiceListening}
             className={cn(
@@ -728,17 +887,17 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
                 ? "bg-rose-600 hover:bg-rose-700 text-white animate-pulse"
                 : "bg-emerald-600 hover:bg-emerald-700 text-white"
             )}
-            title="Ask Voice Assistant: 'What are the current orders in queue?'"
+            title="Speak command (e.g. 'Start cooking table 4', 'Table 4 ready', 'What is queue?')"
           >
             <Mic className={cn("w-4 h-4", isListening && "animate-bounce")} />
             <span>
               {isListening
                 ? "Listening..."
                 : voiceLanguage === "mr"
-                ? "🎙️ ऑर्डर्स विचारा"
+                ? "🎙️ व्हॉइस कमांड"
                 : voiceLanguage === "hi"
-                ? "🎙️ आर्डर्स पूछें"
-                : "🎙️ Ask Orders"}
+                ? "🎙️ वॉइस कमांड"
+                : "🎙️ Voice Command"}
             </span>
           </Button>
 
@@ -921,7 +1080,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
             <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400">
               <ChefHat className="w-10 h-10 mx-auto mb-2 opacity-30 text-blue-500" />
               <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No food currently cooking</p>
-              <p className="text-xs text-slate-400 mt-1">Tap &apos;Start Cooking&apos; on a new order</p>
+              <p className="text-xs text-slate-400 mt-1">Tap &apos;Start Cooking&apos; or use voice command</p>
             </div>
           ) : (
             preparingOrders.map(order => <OrderCard key={order.id} order={order} />)
