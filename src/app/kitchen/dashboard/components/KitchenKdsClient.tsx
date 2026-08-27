@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { 
   Clock, ChefHat, CheckCircle2, Play, Utensils, 
-  Sparkles, RefreshCw, Bell, Search, AlertCircle, Check, ArrowRight, Layers
+  Sparkles, RefreshCw, Bell, Search, AlertCircle, Check, 
+  ArrowRight, Layers, Volume2, VolumeX, Package, BellRing, Settings2, Globe
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,21 +35,185 @@ type Order = {
   items: OrderItem[];
 };
 
+// Play pleasant web audio double-tone chime before speaking
+function playKitchenChime() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+
+    const playTone = (freq: number, start: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + duration);
+    };
+
+    playTone(587.33, 0, 0.18); // D5
+    playTone(880.00, 0.15, 0.35); // A5
+  } catch {
+    // AudioContext blocked or unsupported
+  }
+}
+
 export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [searchTable, setSearchTable] = useState("");
+  const [orderTypeFilter, setOrderTypeFilter] = useState<"ALL" | "DINE_IN" | "TAKEAWAY">("ALL");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<"NEW" | "PREPARING" | "READY" | "ALL">("NEW");
+  
+  // Voice Assistant States
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+  const [voiceLanguage, setVoiceLanguage] = useState<"mr" | "hi" | "en">("mr"); // Default to Marathi
+  const [isReminderEnabled, setIsReminderEnabled] = useState(true);
+  const announcedOrderIdsRef = useRef<Set<string>>(new Set(initialOrders.map(o => o.id)));
+  const lastReminderTimeRef = useRef<number>(Date.now());
   const { toast } = useToast();
+
+  // Load language preference from localStorage
+  useEffect(() => {
+    try {
+      const savedLang = localStorage.getItem("kds_voice_language");
+      if (savedLang === "mr" || savedLang === "hi" || savedLang === "en") {
+        setVoiceLanguage(savedLang);
+      }
+    } catch {}
+  }, []);
+
+  const handleLanguageChange = (lang: "mr" | "hi" | "en") => {
+    setVoiceLanguage(lang);
+    try {
+      localStorage.setItem("kds_voice_language", lang);
+    } catch {}
+
+    const messages = {
+      mr: "व्हॉइस भाषा मराठी निवडली आहे",
+      hi: "वॉइस भाषा हिंदी चुनी गई है",
+      en: "Voice language set to English",
+    };
+    toast({ title: `🗣️ ${messages[lang]}` });
+    speakCustomText(
+      lang === "mr"
+        ? "मराठी व्हॉइस असिस्टंट सक्रिय केले आहे!"
+        : lang === "hi"
+        ? "हिंदी वॉइस असिस्टेंट सक्रिय किया गया है!"
+        : "English voice assistant activated!",
+      lang
+    );
+  };
+
+  // Text-To-Speech Speaker function with Marathi / Hindi / English support
+  const speakCustomText = useCallback((text: string, lang: "mr" | "hi" | "en" = voiceLanguage) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    try {
+      window.speechSynthesis.cancel(); // Stop any pending speech
+      playKitchenChime();
+
+      setTimeout(() => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.95; // slightly slower for maximum clarity in a noisy kitchen
+        utterance.pitch = 1.05;
+
+        const voices = window.speechSynthesis.getVoices();
+
+        if (lang === "mr") {
+          utterance.lang = "mr-IN";
+          const marathiVoice = voices.find(v => 
+            v.lang.startsWith("mr") || 
+            v.name.toLowerCase().includes("marathi") || 
+            v.lang.startsWith("hi") || 
+            v.name.toLowerCase().includes("hindi") ||
+            v.lang.includes("IN")
+          );
+          if (marathiVoice) utterance.voice = marathiVoice;
+        } else if (lang === "hi") {
+          utterance.lang = "hi-IN";
+          const hindiVoice = voices.find(v => 
+            v.lang.startsWith("hi") || 
+            v.name.toLowerCase().includes("hindi") ||
+            v.lang.includes("IN")
+          );
+          if (hindiVoice) utterance.voice = hindiVoice;
+        } else {
+          utterance.lang = "en-IN";
+          const englishVoice = voices.find(v => 
+            (v.lang.startsWith("en") || v.lang.includes("IN")) && 
+            (v.name.includes("India") || v.name.includes("Google") || v.name.includes("Natural") || v.name.includes("Samantha"))
+          );
+          if (englishVoice) utterance.voice = englishVoice;
+        }
+        
+        window.speechSynthesis.speak(utterance);
+      }, 350);
+    } catch (err) {
+      console.error("Speech synthesis error:", err);
+    }
+  }, [voiceLanguage]);
 
   const fetchOrders = useCallback(async () => {
     try {
       const res = await fetch("/api/orders");
       const json = await res.json();
-      if (json.success) {
+      if (json.success && Array.isArray(json.data)) {
         const active = json.data.filter((o: Order) => 
           ['PLACED', 'CONFIRMED', 'PREPARING', 'READY'].includes(o.status)
         );
+        
+        // Check for Brand New Orders to Announce
+        if (isVoiceEnabled) {
+          const newIncomingOrders = active.filter(
+            (o: Order) => !announcedOrderIdsRef.current.has(o.id) && (o.status === "PLACED" || o.status === "CONFIRMED")
+          );
+
+          if (newIncomingOrders.length > 0) {
+            newIncomingOrders.forEach((o: Order) => {
+              announcedOrderIdsRef.current.add(o.id);
+              
+              // Build spoken summary based on language
+              const itemsList = o.items.map((i: OrderItem) => `${i.quantity} ${i.menuItem?.name || "item"}`).join(", ");
+              const isParcel = o.type === "TAKEAWAY";
+              const tokenOrName = o.groupName || o.customer?.name || "पार्सल";
+              const tableNum = o.table?.number || "";
+
+              let announcement = "";
+
+              if (voiceLanguage === "mr") {
+                // MARATHI
+                if (isParcel) {
+                  announcement = `नवीन पार्सल ऑर्डर! टोकन ${tokenOrName}. ऑर्डर्स: ${itemsList}`;
+                } else {
+                  announcement = `नवीन ऑर्डर! टेबल नंबर ${tableNum} साठी. ऑर्डर्स: ${itemsList}`;
+                }
+              } else if (voiceLanguage === "hi") {
+                // HINDI
+                if (isParcel) {
+                  announcement = `नया पार्सल आर्डर आया है! ${tokenOrName}. आइटम्स: ${itemsList}`;
+                } else {
+                  announcement = `नया आर्डर! टेबल नंबर ${tableNum} के लिए. आइटम्स: ${itemsList}`;
+                }
+              } else {
+                // ENGLISH
+                if (isParcel) {
+                  announcement = `New Parcel Order received! ${tokenOrName}. Items: ${itemsList}`;
+                } else {
+                  const tableInfo = o.table ? `Table ${o.table.number}` : "Dine In";
+                  const partyInfo = o.partyLabel ? `, Group ${o.partyLabel}` : "";
+                  announcement = `New Order received for ${tableInfo}${partyInfo}. Items: ${itemsList}`;
+                }
+              }
+
+              speakCustomText(announcement);
+            });
+          }
+        }
+
         setOrders(active);
       }
     } catch (err) {
@@ -56,13 +221,89 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [isVoiceEnabled, voiceLanguage, speakCustomText]);
 
+  // Periodic polling for kitchen orders (every 3 seconds)
   useEffect(() => {
     fetchOrders();
     const interval = setInterval(fetchOrders, 3000);
     return () => clearInterval(interval);
   }, [fetchOrders]);
+
+  // 5-Minute Periodic Voice Reminder & Briefing
+  useEffect(() => {
+    if (!isVoiceEnabled || !isReminderEnabled) return;
+
+    const reminderInterval = setInterval(() => {
+      const now = Date.now();
+      // Check if 5 minutes elapsed (300,000 ms)
+      if (now - lastReminderTimeRef.current >= 300000) {
+        lastReminderTimeRef.current = now;
+
+        const activeTickets = orders.filter(o => o.status !== "READY" && o.status !== "COMPLETED");
+        if (activeTickets.length === 0) return;
+
+        const parcelCount = activeTickets.filter(o => o.type === "TAKEAWAY").length;
+        const tableCount = activeTickets.length - parcelCount;
+
+        // Check for delayed orders (> 8 minutes)
+        const delayedOrders = activeTickets.filter(o => {
+          const diffMins = (now - new Date(o.createdAt).getTime()) / 60000;
+          return diffMins >= 8;
+        });
+
+        let briefingText = "";
+
+        if (voiceLanguage === "mr") {
+          // MARATHI BRIEFING
+          briefingText = `किचन अपडेट: सध्या ${activeTickets.length} ऑर्डर्स चालू आहेत. `;
+          if (parcelCount > 0) briefingText += `${parcelCount} पार्सल, `;
+          if (tableCount > 0) briefingText += `${tableCount} टेबल ऑर्डर्स. `;
+
+          if (delayedOrders.length > 0) {
+            const firstDelayed = delayedOrders[0];
+            const waitMins = Math.floor((now - new Date(firstDelayed.createdAt).getTime()) / 60000);
+            const target = firstDelayed.type === "TAKEAWAY" 
+              ? (firstDelayed.groupName || "पार्सल") 
+              : `टेबल ${firstDelayed.table?.number || ""}`;
+            briefingText += `कृपया लक्ष द्या: ${target} ची ऑर्डर ${waitMins} मिनिटांपासून पेंडिंग आहे.`;
+          }
+        } else if (voiceLanguage === "hi") {
+          // HINDI BRIEFING
+          briefingText = `किचन अपडेट: कुल ${activeTickets.length} आर्डर्स चालू हैं। `;
+          if (parcelCount > 0) briefingText += `${parcelCount} पार्सल, `;
+          if (tableCount > 0) briefingText += `${tableCount} टेबल आर्डर्स। `;
+
+          if (delayedOrders.length > 0) {
+            const firstDelayed = delayedOrders[0];
+            const waitMins = Math.floor((now - new Date(firstDelayed.createdAt).getTime()) / 60000);
+            const target = firstDelayed.type === "TAKEAWAY" 
+              ? (firstDelayed.groupName || "पार्सल") 
+              : `टेबल ${firstDelayed.table?.number || ""}`;
+            briefingText += `ध्यान दें: ${target} का आर्डर ${waitMins} मिनट से पेंडिंग है।`;
+          }
+        } else {
+          // ENGLISH BRIEFING
+          briefingText = `Kitchen reminder. You have ${activeTickets.length} active tickets. `;
+          if (parcelCount > 0) briefingText += `${parcelCount} parcel orders, `;
+          if (tableCount > 0) briefingText += `${tableCount} table orders. `;
+
+          if (delayedOrders.length > 0) {
+            const firstDelayed = delayedOrders[0];
+            const waitMins = Math.floor((now - new Date(firstDelayed.createdAt).getTime()) / 60000);
+            const target = firstDelayed.type === "TAKEAWAY" 
+              ? (firstDelayed.groupName || "Parcel") 
+              : `Table ${firstDelayed.table?.number || ""}`;
+            briefingText += `Attention: ${target} has been waiting for ${waitMins} minutes.`;
+          }
+        }
+
+        speakCustomText(briefingText);
+      }
+    }, 15000); // check condition every 15s
+
+    return () => clearInterval(reminderInterval);
+  }, [isVoiceEnabled, isReminderEnabled, orders, voiceLanguage, speakCustomText]);
 
   const updateStatus = async (id: string, status: string) => {
     try {
@@ -78,24 +319,44 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
       } else {
         toast({ variant: "destructive", title: "Error", description: json.error });
       }
-    } catch (err) {
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "Network error" });
     }
   };
 
-  // Filter orders by search
+  const handleTestVoice = () => {
+    let testMsg = "Kitchen Voice Assistant is online and ready for incoming orders!";
+    if (voiceLanguage === "mr") {
+      testMsg = "नमस्कार! किचन व्हॉइस असिस्टंट सुरू आहे आणि नवीन ऑर्डर्स सांगण्यासाठी तयार आहे!";
+    } else if (voiceLanguage === "hi") {
+      testMsg = "नमस्ते! किचन वॉइस असिस्टेंट चालू है और नए ऑर्डर्स के लिए तैयार है!";
+    }
+    speakCustomText(testMsg);
+    toast({ title: `🔊 Playing Voice Test in ${voiceLanguage === "mr" ? "मराठी (Marathi)" : voiceLanguage === "hi" ? "हिंदी (Hindi)" : "English"}...` });
+  };
+
+  // Filter orders by search & type
   const filteredOrders = orders.filter(o => {
+    // Type Filter
+    if (orderTypeFilter === "DINE_IN" && o.type === "TAKEAWAY") return false;
+    if (orderTypeFilter === "TAKEAWAY" && o.type !== "TAKEAWAY") return false;
+
+    // Search Filter
     if (!searchTable.trim()) return true;
     const q = searchTable.toLowerCase();
     const tableMatch = o.table?.number.toLowerCase().includes(q);
+    const tokenMatch = o.groupName?.toLowerCase().includes(q);
     const itemMatch = o.items?.some(i => i.menuItem?.name?.toLowerCase().includes(q));
     const customerMatch = o.customer?.name?.toLowerCase().includes(q);
-    return tableMatch || itemMatch || customerMatch;
+    return tableMatch || tokenMatch || itemMatch || customerMatch;
   });
 
   const newOrders = filteredOrders.filter(o => o.status === 'PLACED' || o.status === 'CONFIRMED');
   const preparingOrders = filteredOrders.filter(o => o.status === 'PREPARING');
   const readyOrders = filteredOrders.filter(o => o.status === 'READY');
+
+  const dineInCount = orders.filter(o => o.type !== "TAKEAWAY").length;
+  const takeawayCount = orders.filter(o => o.type === "TAKEAWAY").length;
 
   const getElapsedTime = (createdAt: string) => {
     const diffMins = Math.floor((new Date().getTime() - new Date(createdAt).getTime()) / 60000);
@@ -110,6 +371,8 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
   };
 
   const renderOrderCardActions = (order: Order) => {
+    const isParcel = order.type === "TAKEAWAY";
+
     if (order.status === 'PLACED' || order.status === 'CONFIRMED') {
       return (
         <Button
@@ -117,7 +380,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
           className="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white font-bold h-11 rounded-xl shadow-xs flex items-center justify-center space-x-1.5 text-sm"
         >
           <Play className="w-4 h-4 fill-white" />
-          <span>Start Cooking 👨‍🍳</span>
+          <span>{isParcel ? "Start Cooking Parcel 📦👨‍🍳" : "Start Cooking 👨‍🍳"}</span>
         </Button>
       );
     }
@@ -128,7 +391,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
           className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold h-11 rounded-xl shadow-xs flex items-center justify-center space-x-1.5 text-sm"
         >
           <CheckCircle2 className="w-4 h-4" />
-          <span>Mark Ready to Serve 🛎️</span>
+          <span>{isParcel ? "Mark Parcel Ready for Packing 📦🛎️" : "Mark Ready to Serve 🛎️"}</span>
         </Button>
       );
     }
@@ -140,7 +403,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
           className="w-full border-2 border-emerald-500 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 active:scale-98 font-bold h-11 rounded-xl flex items-center justify-center space-x-1.5 text-xs sm:text-sm"
         >
           <Check className="w-4 h-4" />
-          <span>Mark Served to Table</span>
+          <span>{isParcel ? "Mark Handed Over / Packed ✅" : "Mark Served to Table"}</span>
         </Button>
       );
     }
@@ -153,6 +416,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
     const isNew = order.status === 'PLACED' || order.status === 'CONFIRMED';
     const isCooking = order.status === 'PREPARING';
     const isReady = order.status === 'READY';
+    const isParcel = order.type === 'TAKEAWAY';
 
     return (
       <div className={`bg-white dark:bg-slate-900 border rounded-2xl p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-all ${
@@ -168,14 +432,26 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
         <div className="flex items-start justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
           <div>
             <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-              <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center">
-                {order.table ? `Table ${order.table.number}` : 'Takeaway'}
-                {order.partyLabel && (
-                  <span className="ml-1.5 text-xs font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 px-1.5 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">
-                    Group {order.partyLabel}
+              {isParcel ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="bg-amber-500 text-slate-950 font-black text-xs px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs">
+                    <Package className="w-3.5 h-3.5" /> PARCEL
                   </span>
-                )}
-              </span>
+                  <span className="text-lg font-black tracking-tight text-slate-900 dark:text-white">
+                    {order.groupName || "Takeaway"}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center">
+                  {order.table ? `Table ${order.table.number}` : 'Dine-In'}
+                  {order.partyLabel && (
+                    <span className="ml-1.5 text-xs font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 px-1.5 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">
+                      Group {order.partyLabel}
+                    </span>
+                  )}
+                </span>
+              )}
+
               {fresh && isNew && (
                 <span className="bg-emerald-500 text-white font-black text-[10px] px-2 py-0.5 rounded-full animate-pulse uppercase">
                   NEW!
@@ -211,7 +487,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
         <div className="py-3.5 space-y-2.5 flex-1">
           {(!order.items || order.items.length === 0) ? (
             <p className="text-xs text-slate-400 dark:text-slate-500 italic py-2">
-              Guest seated • Waiting for dishes to be placed...
+              Order placed • Waiting for kitchen preparation...
             </p>
           ) : (
             order.items.map((item) => (
@@ -229,6 +505,8 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
                         "text-xs rounded px-2 py-1 mt-1 font-semibold",
                         item.specialInstructions.includes("ADD-ON")
                           ? "bg-amber-500 text-slate-950 font-black shadow-xs flex items-center gap-1"
+                          : item.specialInstructions.includes("PARCEL")
+                          ? "bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 border border-amber-300"
                           : "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 italic"
                       )}>
                         {item.specialInstructions}
@@ -252,10 +530,10 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
   return (
     <div className="space-y-3">
       {/* KDS TOP CONTROL BAR */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 px-4 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 px-4 shadow-xs flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
         
-        {/* Left: Summary Metrics with horizontal scroll on small mobile */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+        {/* Left: Summary Metrics with horizontal scroll */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 xl:pb-0 scrollbar-none">
           <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-xs shrink-0">
             <ChefHat className="w-4 h-4 text-amber-500" />
             <span>Active: {orders.length}</span>
@@ -277,18 +555,137 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
           </div>
         </div>
 
-        {/* Right: Search & Refresh */}
-        <div className="flex items-center space-x-2">
-          <div className="relative flex-1 md:w-56">
+        {/* Center: Dine-in vs Parcel Filter Pills */}
+        <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl gap-1 shrink-0">
+          <button
+            onClick={() => setOrderTypeFilter("ALL")}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+              orderTypeFilter === "ALL"
+                ? "bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            All ({orders.length})
+          </button>
+          <button
+            onClick={() => setOrderTypeFilter("DINE_IN")}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1",
+              orderTypeFilter === "DINE_IN"
+                ? "bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            <Utensils className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Dine-In ({dineInCount})</span>
+          </button>
+          <button
+            onClick={() => setOrderTypeFilter("TAKEAWAY")}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1",
+              orderTypeFilter === "TAKEAWAY"
+                ? "bg-amber-500 text-slate-950 font-black shadow-xs"
+                : "text-amber-700 dark:text-amber-400 hover:bg-amber-50"
+            )}
+          >
+            <Package className="w-3.5 h-3.5" />
+            <span>Parcels ({takeawayCount})</span>
+          </button>
+        </div>
+
+        {/* Right: AI Voice Controls, Language Selector, Search & Sync */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Language Selector (Marathi, Hindi, English) */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl gap-0.5 shrink-0 border border-slate-200/80 dark:border-slate-800">
+            <Globe className="w-3.5 h-3.5 text-slate-400 ml-1.5 mr-0.5" />
+            <button
+              onClick={() => handleLanguageChange("mr")}
+              className={cn(
+                "px-2 py-1 rounded-lg text-[11px] font-bold transition-all",
+                voiceLanguage === "mr"
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              मराठी
+            </button>
+            <button
+              onClick={() => handleLanguageChange("hi")}
+              className={cn(
+                "px-2 py-1 rounded-lg text-[11px] font-bold transition-all",
+                voiceLanguage === "hi"
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              हिंदी
+            </button>
+            <button
+              onClick={() => handleLanguageChange("en")}
+              className={cn(
+                "px-2 py-1 rounded-lg text-[11px] font-bold transition-all",
+                voiceLanguage === "en"
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              EN
+            </button>
+          </div>
+
+          {/* AI Voice Toggle Button */}
+          <div className="flex items-center gap-1">
+            <Button
+              onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
+              size="sm"
+              variant={isVoiceEnabled ? "default" : "outline"}
+              className={cn(
+                "h-9 text-xs rounded-xl font-bold px-2.5 transition-all",
+                isVoiceEnabled
+                  ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                  : "text-slate-500"
+              )}
+              title={isVoiceEnabled ? "Voice Assistant Active (Speaks new orders & 5-min briefing)" : "Voice Assistant Muted"}
+            >
+              {isVoiceEnabled ? (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 mr-1 text-emerald-300 animate-pulse" />
+                  Voice: ON
+                </>
+              ) : (
+                <>
+                  <VolumeX className="w-3.5 h-3.5 mr-1" />
+                  Voice: OFF
+                </>
+              )}
+            </Button>
+
+            {isVoiceEnabled && (
+              <Button
+                onClick={handleTestVoice}
+                size="sm"
+                variant="ghost"
+                className="h-9 px-2 text-[11px] text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 rounded-xl font-bold"
+                title="Test Audio Chime & Speech Output"
+              >
+                Test
+              </Button>
+            )}
+          </div>
+
+          {/* Search Box */}
+          <div className="relative flex-1 sm:w-40">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input
-              placeholder="Search table / dish / guest..."
+              placeholder="Search table / parcel..."
               value={searchTable}
               onChange={(e) => setSearchTable(e.target.value)}
               className="h-9 text-xs pl-8 w-full bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl"
             />
           </div>
 
+          {/* Sync */}
           <Button
             onClick={() => {
               setIsRefreshing(true);
@@ -296,10 +693,10 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
             }}
             size="sm"
             variant="outline"
-            className="h-9 text-xs border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 px-3"
+            className="h-9 text-xs border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 px-2.5 rounded-xl"
           >
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
+            Sync
           </Button>
         </div>
       </div>
@@ -366,7 +763,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
             <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400">
               <Utensils className="w-10 h-10 mx-auto mb-2 opacity-30 text-rose-500" />
               <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No new incoming orders</p>
-              <p className="text-xs text-slate-400 mt-1">Orders placed by guests will pop up here</p>
+              <p className="text-xs text-slate-400 mt-1">Orders placed will pop up here with voice announcement</p>
             </div>
           ) : (
             newOrders.map(order => <OrderCard key={order.id} order={order} />)
@@ -378,7 +775,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
             <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400">
               <ChefHat className="w-10 h-10 mx-auto mb-2 opacity-30 text-blue-500" />
               <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No food currently cooking</p>
-              <p className="text-xs text-slate-400 mt-1">Tap 'Start Cooking' on a new order</p>
+              <p className="text-xs text-slate-400 mt-1">Tap &apos;Start Cooking&apos; on a new order</p>
             </div>
           ) : (
             preparingOrders.map(order => <OrderCard key={order.id} order={order} />)

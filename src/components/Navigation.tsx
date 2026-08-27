@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { 
   LayoutDashboard, Users, UtensilsCrossed, ShoppingBag, 
-  ReceiptText, ChefHat, LogOut, Menu, Shield, Armchair, X, PlusCircle, Zap 
+  ReceiptText, ChefHat, LogOut, Menu, Shield, Armchair, X, PlusCircle, Zap, Package
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
@@ -58,6 +58,7 @@ export function Navigation({ session }: { session: Session | null }) {
     navItems.push({ href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> });
     navItems.push({ href: "/admin/tables", label: "Floor & Queue", icon: <Armchair className="w-4 h-4" /> });
     navItems.push({ href: "/staff/pos", label: "Take Order", icon: <PlusCircle className="w-4 h-4 text-emerald-500" /> });
+    navItems.push({ href: "/staff/parcels", label: "Parcels", icon: <Package className="w-4 h-4 text-amber-500" /> });
     navItems.push({ href: "/staff/addons", label: "Quick Add-Ons", icon: <Zap className="w-4 h-4 text-amber-500 fill-amber-500" /> });
     navItems.push({ href: "/admin/menu", label: "Menu Mgt", icon: <UtensilsCrossed className="w-4 h-4" /> });
     navItems.push({ href: "/admin/staff", label: "Staff Mgt", icon: <Users className="w-4 h-4" /> });
@@ -68,6 +69,7 @@ export function Navigation({ session }: { session: Session | null }) {
 
   if (role === "WAITER" || role === "CASHIER") {
     navItems.push({ href: "/staff/pos", label: "Take Order (POS)", icon: <PlusCircle className="w-4 h-4 text-emerald-500" /> });
+    navItems.push({ href: "/staff/parcels", label: "Parcels", icon: <Package className="w-4 h-4 text-amber-500" /> });
     navItems.push({ href: "/staff/addons", label: "Quick Add-Ons", icon: <Zap className="w-4 h-4 text-amber-500 fill-amber-500" /> });
     navItems.push({ href: "/staff/tables", label: "Floor & Seating", icon: <Armchair className="w-4 h-4" /> });
     navItems.push({ href: "/staff/queue", label: "Queue", icon: <Users className="w-4 h-4" /> });
@@ -81,8 +83,8 @@ export function Navigation({ session }: { session: Session | null }) {
 
   return (
     <>
-      {/* Mobile Top Header */}
-      <header className="md:hidden sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md text-slate-900 dark:text-white border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex justify-between items-center shadow-xs">
+      {/* Mobile Top Header (with Capacitor / Notch safe area inset) */}
+      <header className="md:hidden sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md text-slate-900 dark:text-white border-b border-slate-200 dark:border-slate-800 px-4 pt-[calc(env(safe-area-inset-top,0px)+0.625rem)] pb-2.5 flex justify-between items-center shadow-xs">
         <div className="flex items-center space-x-2">
           <span className="font-black tracking-tight text-lg bg-gradient-to-r from-slate-900 to-indigo-700 dark:from-white dark:to-indigo-300 bg-clip-text text-transparent">
             Resto OS
@@ -100,7 +102,7 @@ export function Navigation({ session }: { session: Session | null }) {
             size="icon" 
             onClick={() => setIsOpen(!isOpen)} 
             aria-label="Toggle Navigation Menu"
-            className="hover:bg-slate-100 dark:hover:bg-slate-800 h-9 w-9 rounded-xl"
+            className="hover:bg-slate-100 dark:hover:bg-slate-800 h-9 w-9 rounded-xl touch-manipulation"
           >
             {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </Button>
@@ -116,8 +118,8 @@ export function Navigation({ session }: { session: Session | null }) {
             onClick={() => setIsOpen(false)} 
           />
 
-          {/* Drawer Content */}
-          <div className="relative w-full max-w-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white h-full shadow-2xl flex flex-col z-10 border-r border-slate-200 dark:border-slate-800">
+          {/* Drawer Content with Top and Bottom Safe Area Inset */}
+          <div className="relative w-full max-w-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white h-full shadow-2xl flex flex-col z-10 border-r border-slate-200 dark:border-slate-800 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]">
             {/* Drawer Header */}
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div>
