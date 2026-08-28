@@ -129,6 +129,7 @@ export function ParcelManagementClient({
   const [paymentOption, setPaymentOption] = useState<"PAID_CASH" | "PAID_UPI" | "PAID_CARD" | "PAY_ON_PICKUP">("PAY_ON_PICKUP");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
 
   // POS Menu Filter States
   const [menuSearch, setMenuSearch] = useState("");
@@ -955,6 +956,193 @@ export function ParcelManagementClient({
               </div>
             </div>
           </div>
+
+          {/* ==================================================== */}
+          {/* MOBILE STICKY FLOATING CART BAR (Screens < lg) */}
+          {/* ==================================================== */}
+          {cart.length > 0 && (
+            <div className="lg:hidden fixed bottom-4 left-4 right-4 z-40 animate-in slide-in-from-bottom-5 duration-300 pb-safe">
+              <button
+                type="button"
+                onClick={() => setIsMobileCartOpen(true)}
+                className="w-full bg-slate-950 dark:bg-white text-white dark:text-slate-950 p-3.5 rounded-2xl shadow-2xl flex items-center justify-between font-bold border border-slate-700/40 active:scale-98 transition-all"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="bg-amber-500 text-slate-950 text-xs px-2.5 py-0.5 rounded-lg font-black">
+                    {cart.reduce((s, i) => s + i.quantity, 0)} Items
+                  </span>
+                  <span className="text-sm font-black tracking-tight">
+                    {currency}{cartTotal.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1 text-xs text-amber-400 dark:text-amber-600 font-extrabold uppercase tracking-wide">
+                  <span>Review & Send</span>
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+              </button>
+            </div>
+          )}
+
+          {/* ==================================================== */}
+          {/* MOBILE CART BOTTOM SHEET DRAWER (Screens < lg) */}
+          {/* ==================================================== */}
+          {isMobileCartOpen && (
+            <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end">
+              {/* Backdrop */}
+              <div
+                className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+                onClick={() => setIsMobileCartOpen(false)}
+              />
+
+              {/* Sheet Body */}
+              <div className="relative w-full max-h-[90vh] bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl z-10 flex flex-col overflow-hidden border-t border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom duration-300 pb-safe">
+                {/* Header */}
+                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-xl bg-amber-500 text-slate-950 font-black">
+                      <ShoppingBag className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-base text-slate-900 dark:text-white">
+                        Review Parcel Order
+                      </h3>
+                      <span className="text-xs font-mono font-bold text-slate-500">
+                        {tokenNumber} • {customerName.trim() || "Walk-in Guest"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileCartOpen(false)}
+                    className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-full bg-slate-200/60 dark:bg-slate-800"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Items List Scroll */}
+                <div className="p-4 space-y-3 overflow-y-auto flex-1 divide-y divide-slate-100 dark:divide-slate-800 max-h-[45vh]">
+                  {cart.map((item) => (
+                    <div key={item.menuItem.id} className="pt-3 first:pt-0 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-sm text-slate-900 dark:text-white block">
+                            {item.menuItem.name}
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            {currency}{item.menuItem.price.toFixed(2)} each
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateQuantity(item.menuItem.id, -1)}
+                              className="p-1 text-slate-600 hover:text-slate-900"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="text-xs font-black px-2">{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateQuantity(item.menuItem.id, 1)}
+                              className="p-1 text-slate-600 hover:text-slate-900"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <span className="font-black text-sm text-slate-900 dark:text-white w-14 text-right">
+                            {currency}{(item.menuItem.price * item.quantity).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <input
+                        type="text"
+                        placeholder="Item packaging note (optional)"
+                        value={item.specialInstructions || ""}
+                        onChange={(e) => handleUpdateItemInstructions(item.menuItem.id, e.target.value)}
+                        className="w-full px-2.5 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Bill Breakdown & Payment Mode */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="flex items-center gap-2 font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={includePackagingFee}
+                        onChange={(e) => setIncludePackagingFee(e.target.checked)}
+                        className="rounded w-4 h-4 text-slate-900"
+                      />
+                      <span>Add Parcel Container Fee</span>
+                    </label>
+                    <span className="font-bold">{currency}{packagingFee.toFixed(2)}</span>
+                  </div>
+
+                  <div className="space-y-1 text-xs text-slate-500 border-t pt-2 border-slate-200 dark:border-slate-700">
+                    <div className="flex justify-between">
+                      <span>Grand Total</span>
+                      <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                        {currency}{cartTotal.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentOption("PAY_ON_PICKUP")}
+                      className={cn(
+                        "py-2.5 px-2 rounded-xl border text-center font-bold",
+                        paymentOption === "PAY_ON_PICKUP"
+                          ? "bg-amber-50 border-amber-400 text-amber-900"
+                          : "bg-white dark:bg-slate-800 border-slate-200 text-slate-600"
+                      )}
+                    >
+                      🕒 Pay at Pickup
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentOption("PAID_UPI")}
+                      className={cn(
+                        "py-2.5 px-2 rounded-xl border text-center font-bold",
+                        paymentOption.startsWith("PAID")
+                          ? "bg-emerald-50 border-emerald-400 text-emerald-900"
+                          : "bg-white dark:bg-slate-800 border-slate-200 text-slate-600"
+                      )}
+                    >
+                      ✅ Paid Now (UPI/Cash)
+                    </button>
+                  </div>
+
+                  <Button
+                    onClick={handleSendToKitchen}
+                    disabled={isSubmittingOrder}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 py-3.5 h-12 rounded-2xl font-bold text-sm shadow-md active:scale-98 flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingOrder ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Sending to Kitchen...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Send Parcel to Kitchen (KDS) 🔥
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* ==================================================== */}
