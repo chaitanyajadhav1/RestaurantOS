@@ -753,15 +753,13 @@ export function WaiterPosClient({
 
               <Button
                 onClick={handleSendToKitchen}
-                disabled={cartItemsCount === 0 || isSubmitting}
+                isLoading={isSubmitting}
+                loadingText={`Dispatching KOT... (₹${cartTotal.toFixed(0)})`}
+                disabled={cartItemsCount === 0}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 rounded-xl text-sm shadow-md flex items-center justify-center space-x-2"
               >
                 <Send className="w-4 h-4" />
-                <span>
-                  {isSubmitting
-                    ? "Dispatching..."
-                    : `Send KOT to Kitchen (₹${cartTotal.toFixed(0)})`}
-                </span>
+                <span>Send KOT to Kitchen (₹{cartTotal.toFixed(0)})</span>
               </Button>
             </div>
           </Card>
@@ -887,11 +885,12 @@ export function WaiterPosClient({
             </Button>
             <Button
               onClick={handleSendToKitchen}
-              disabled={isSubmitting}
+              isLoading={isSubmitting}
+              loadingText="Dispatching..."
               size="sm"
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs"
             >
-              {isSubmitting ? "Dispatching..." : "Confirm & Send KOT"}
+              Confirm & Send KOT
             </Button>
           </DialogFooter>
         </DialogContent>

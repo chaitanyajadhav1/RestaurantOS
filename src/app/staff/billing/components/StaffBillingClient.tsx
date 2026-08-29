@@ -142,10 +142,11 @@ export function StaffBillingClient({ initialOrders }: { initialOrders: Order[] }
 
       <Button 
         onClick={handleSettle} 
-        disabled={loading} 
+        isLoading={loading}
+        loadingText="Processing Payment..."
         className="w-full h-12 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs"
       >
-        {loading ? "Processing..." : `Collect ₹${order.total.toFixed(2)}`}
+        Collect ₹{order.total.toFixed(2)}
       </Button>
     </div>
   );

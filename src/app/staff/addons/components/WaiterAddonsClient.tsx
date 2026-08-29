@@ -937,15 +937,12 @@ export function WaiterAddonsClient({
               </Button>
               <Button
                 onClick={handleSendAddonKot}
-                disabled={isSubmitting}
+                isLoading={isSubmitting}
+                loadingText="Dispatching Add-Ons..."
                 className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white font-black h-11 px-5 rounded-2xl text-xs sm:text-sm shadow-md flex items-center justify-center space-x-1.5"
               >
                 <Send className="w-4 h-4 mr-1" />
-                <span>
-                  {isSubmitting
-                    ? "Dispatching..."
-                    : `🔥 Send Add-On KOT (₹${addonTotal.toFixed(0)})`}
-                </span>
+                <span>🔥 Send Add-On KOT (₹{addonTotal.toFixed(0)})</span>
               </Button>
             </div>
           </div>
@@ -1054,11 +1051,12 @@ export function WaiterAddonsClient({
               </Button>
               <Button
                 type="submit"
-                disabled={isCreatingItem}
+                isLoading={isCreatingItem}
+                loadingText="Creating..."
                 size="sm"
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs"
               >
-                {isCreatingItem ? "Creating..." : "Save & Add to Menu"}
+                Save & Add to Menu
               </Button>
             </DialogFooter>
           </form>

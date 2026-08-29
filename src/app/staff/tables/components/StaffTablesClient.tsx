@@ -182,10 +182,12 @@ export function StaffTablesClient({
             <Button 
               size="sm" 
               onClick={handleAssign} 
-              disabled={loading || !selectedQueueId || selectedQueueId === 'none'}
+              isLoading={loading}
+              loadingText="Assigning..."
+              disabled={!selectedQueueId || selectedQueueId === 'none'}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
             >
-              {loading ? "Assigning..." : "Confirm Seating"}
+              Confirm Seating
             </Button>
           </DialogFooter>
         </DialogContent>
