@@ -96,6 +96,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
   const [orderTypeFilter, setOrderTypeFilter] = useState<"ALL" | "DINE_IN" | "TAKEAWAY">("ALL");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<"ALL" | "NEW" | "PREPARING" | "READY">("ALL");
+  const [updatingOrderIds, setUpdatingOrderIds] = useState<Set<string>>(new Set());
   
   // Voice Assistant States
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
@@ -255,12 +256,8 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
   }, [isVoiceEnabled, voiceLanguage, speakCustomText]);
 
   const updateStatus = useCallback(async (id: string, status: string, customNotification?: string) => {
-    // Optimistically update order in place
-    setOrders(prev => 
-      status === "COMPLETED" 
-        ? prev.filter(o => o.id !== id)
-        : prev.map(o => o.id === id ? { ...o, status } : o)
-    );
+    // Prevent duplicate rapid taps on the same ticket
+    setUpdatingOrderIds(prev => new Set(prev).add(id));
 
     try {
       const res = await fetch(`/api/orders/${id}`, {
@@ -270,6 +267,12 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
       });
       const json = await res.json();
       if (json.success) {
+        // Update local order status in place
+        setOrders(prev => 
+          status === "COMPLETED" 
+            ? prev.filter(o => o.id !== id)
+            : prev.map(o => o.id === id ? { ...o, status } : o)
+        );
         toast({ title: customNotification || `Ticket updated to ${status.replace('_', ' ')}` });
         fetchOrders();
       } else {
@@ -279,6 +282,12 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Network error" });
       fetchOrders();
+    } finally {
+      setUpdatingOrderIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   }, [fetchOrders, toast]);
 
@@ -665,6 +674,19 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
 
   const renderOrderCardActions = (order: Order) => {
     const isParcel = order.type === "TAKEAWAY";
+    const isUpdating = updatingOrderIds.has(order.id);
+
+    if (isUpdating) {
+      return (
+        <Button
+          disabled
+          className="w-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold h-11 rounded-xl flex items-center justify-center space-x-2 text-sm cursor-not-allowed border border-slate-200 dark:border-slate-700"
+        >
+          <RefreshCw className="w-4 h-4 animate-spin text-slate-500" />
+          <span>Updating Ticket...</span>
+        </Button>
+      );
+    }
 
     if (order.status === 'PLACED' || order.status === 'CONFIRMED') {
       return (
