@@ -895,8 +895,90 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
           </button>
         </div>
 
-        {/* Right: Type Filter & Search Controls */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        {/* Right: Voice Controls, Type Filter & Search Controls */}
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
+          {/* Voice Command Mic Button */}
+          <Button
+            onClick={startVoiceListening}
+            size="sm"
+            className={cn(
+              "h-8.5 px-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-xs active:scale-95 shrink-0",
+              isListening
+                ? "bg-rose-600 hover:bg-rose-700 text-white animate-pulse"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+            )}
+            title="Speak command (e.g. 'Start cooking table 4', 'Table 4 ready', 'What is queue?')"
+          >
+            <Mic className={cn("w-3.5 h-3.5", isListening && "animate-bounce")} />
+            <span>
+              {isListening
+                ? "Listening..."
+                : voiceLanguage === "mr"
+                ? "व्हॉइस कमांड"
+                : voiceLanguage === "hi"
+                ? "वॉइस कमांड"
+                : "Voice Command"}
+            </span>
+          </Button>
+
+          {/* Voice Language Selector */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-0.5 rounded-xl gap-0.5 shrink-0 border border-slate-200/80 dark:border-slate-800">
+            <Globe className="w-3 h-3 text-slate-400 ml-1.5 mr-0.5 hidden xs:inline-block" />
+            <button
+              onClick={() => handleLanguageChange("mr")}
+              className={cn(
+                "px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all",
+                voiceLanguage === "mr"
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+              )}
+            >
+              मराठी
+            </button>
+            <button
+              onClick={() => handleLanguageChange("hi")}
+              className={cn(
+                "px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all",
+                voiceLanguage === "hi"
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+              )}
+            >
+              हिंदी
+            </button>
+            <button
+              onClick={() => handleLanguageChange("en")}
+              className={cn(
+                "px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all",
+                voiceLanguage === "en"
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+              )}
+            >
+              EN
+            </button>
+          </div>
+
+          {/* Voice Mute/Unmute Toggle */}
+          <Button
+            onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
+            size="sm"
+            variant={isVoiceEnabled ? "default" : "outline"}
+            className={cn(
+              "h-8.5 text-xs rounded-xl font-bold px-2 transition-all shrink-0",
+              isVoiceEnabled
+                ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                : "text-slate-500 border-slate-200 dark:border-slate-800"
+            )}
+            title={isVoiceEnabled ? "Voice Announcements ON" : "Voice Muted"}
+          >
+            {isVoiceEnabled ? (
+              <Volume2 className="w-3.5 h-3.5 text-emerald-300 animate-pulse" />
+            ) : (
+              <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+            )}
+          </Button>
+
           {/* Order Type Toggle */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl gap-1 shrink-0 overflow-x-auto scrollbar-none">
             <button
@@ -937,7 +1019,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
           </div>
 
           {/* Search Box */}
-          <div className="relative flex-1 sm:w-44 min-w-[130px]">
+          <div className="relative flex-1 sm:w-40 min-w-[120px]">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input
               placeholder="Search table/item..."
