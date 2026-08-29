@@ -188,6 +188,72 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
     }
   }, [voiceLanguage]);
 
+  const fetchOrders = useCallback(async () => {
+    try {
+      const res = await fetch("/api/orders");
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        const active = json.data.filter((o: Order) => 
+          ['PLACED', 'CONFIRMED', 'PREPARING', 'READY'].includes(o.status)
+        );
+        
+        // Check for Brand New Orders to Announce
+        if (isVoiceEnabled) {
+          const newIncomingOrders = active.filter(
+            (o: Order) => !announcedOrderIdsRef.current.has(o.id) && (o.status === "PLACED" || o.status === "CONFIRMED")
+          );
+
+          if (newIncomingOrders.length > 0) {
+            newIncomingOrders.forEach((o: Order) => {
+              announcedOrderIdsRef.current.add(o.id);
+              
+              // Build spoken summary based on language
+              const itemsList = o.items.map((i: OrderItem) => `${i.quantity} ${i.menuItem?.name || "item"}`).join(", ");
+              const isParcel = o.type === "TAKEAWAY";
+              const tokenOrName = o.groupName || o.customer?.name || "पार्सल";
+              const tableNum = o.table?.number || "";
+
+              let announcement = "";
+
+              if (voiceLanguage === "mr") {
+                // MARATHI
+                if (isParcel) {
+                  announcement = `नवीन पार्सल ऑर्डर! टोकन ${tokenOrName}. ऑर्डर्स: ${itemsList}`;
+                } else {
+                  announcement = `नवीन ऑर्डर! टेबल नंबर ${tableNum} साठी. ऑर्डर्स: ${itemsList}`;
+                }
+              } else if (voiceLanguage === "hi") {
+                // HINDI
+                if (isParcel) {
+                  announcement = `नया पार्सल आर्डर आया है! ${tokenOrName}. आइटम्स: ${itemsList}`;
+                } else {
+                  announcement = `नया आर्डर! टेबल नंबर ${tableNum} के लिए. आइटम्स: ${itemsList}`;
+                }
+              } else {
+                // ENGLISH
+                if (isParcel) {
+                  announcement = `New Parcel Order received! ${tokenOrName}. Items: ${itemsList}`;
+                } else {
+                  const tableInfo = o.table ? `Table ${o.table.number}` : "Dine In";
+                  const partyInfo = o.partyLabel ? `, Group ${o.partyLabel}` : "";
+                  announcement = `New Order received for ${tableInfo}${partyInfo}. Items: ${itemsList}`;
+                }
+              }
+
+              speakCustomText(announcement);
+            });
+          }
+        }
+
+        setOrders(active);
+      }
+    } catch (err) {
+      console.error("Failed to fetch KDS orders");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isVoiceEnabled, voiceLanguage, speakCustomText]);
+
   const updateStatus = useCallback(async (id: string, status: string, customNotification?: string) => {
     // Optimistically update order in place
     setOrders(prev => 
@@ -467,71 +533,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
     }
   }, [isListening, voiceLanguage, processVoiceCommand, readOutCurrentOrdersQueue, toast]);
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      const res = await fetch("/api/orders");
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
-        const active = json.data.filter((o: Order) => 
-          ['PLACED', 'CONFIRMED', 'PREPARING', 'READY'].includes(o.status)
-        );
-        
-        // Check for Brand New Orders to Announce
-        if (isVoiceEnabled) {
-          const newIncomingOrders = active.filter(
-            (o: Order) => !announcedOrderIdsRef.current.has(o.id) && (o.status === "PLACED" || o.status === "CONFIRMED")
-          );
 
-          if (newIncomingOrders.length > 0) {
-            newIncomingOrders.forEach((o: Order) => {
-              announcedOrderIdsRef.current.add(o.id);
-              
-              // Build spoken summary based on language
-              const itemsList = o.items.map((i: OrderItem) => `${i.quantity} ${i.menuItem?.name || "item"}`).join(", ");
-              const isParcel = o.type === "TAKEAWAY";
-              const tokenOrName = o.groupName || o.customer?.name || "पार्सल";
-              const tableNum = o.table?.number || "";
-
-              let announcement = "";
-
-              if (voiceLanguage === "mr") {
-                // MARATHI
-                if (isParcel) {
-                  announcement = `नवीन पार्सल ऑर्डर! टोकन ${tokenOrName}. ऑर्डर्स: ${itemsList}`;
-                } else {
-                  announcement = `नवीन ऑर्डर! टेबल नंबर ${tableNum} साठी. ऑर्डर्स: ${itemsList}`;
-                }
-              } else if (voiceLanguage === "hi") {
-                // HINDI
-                if (isParcel) {
-                  announcement = `नया पार्सल आर्डर आया है! ${tokenOrName}. आइटम्स: ${itemsList}`;
-                } else {
-                  announcement = `नया आर्डर! टेबल नंबर ${tableNum} के लिए. आइटम्स: ${itemsList}`;
-                }
-              } else {
-                // ENGLISH
-                if (isParcel) {
-                  announcement = `New Parcel Order received! ${tokenOrName}. Items: ${itemsList}`;
-                } else {
-                  const tableInfo = o.table ? `Table ${o.table.number}` : "Dine In";
-                  const partyInfo = o.partyLabel ? `, Group ${o.partyLabel}` : "";
-                  announcement = `New Order received for ${tableInfo}${partyInfo}. Items: ${itemsList}`;
-                }
-              }
-
-              speakCustomText(announcement);
-            });
-          }
-        }
-
-        setOrders(active);
-      }
-    } catch (err) {
-      console.error("Failed to fetch KDS orders");
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [isVoiceEnabled, voiceLanguage, speakCustomText]);
 
   // Periodic polling for kitchen orders (every 3 seconds)
   useEffect(() => {
