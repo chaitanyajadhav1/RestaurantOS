@@ -95,7 +95,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
   const [searchTable, setSearchTable] = useState("");
   const [orderTypeFilter, setOrderTypeFilter] = useState<"ALL" | "DINE_IN" | "TAKEAWAY">("ALL");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeMobileTab, setActiveMobileTab] = useState<"NEW" | "PREPARING" | "READY" | "ALL">("NEW");
+  const [activeTab, setActiveTab] = useState<"NEW" | "PREPARING" | "READY" | "ALL">("NEW");
   
   // Voice Assistant States
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
@@ -659,10 +659,10 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
       return (
         <Button
           onClick={() => updateStatus(order.id, 'PREPARING')}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white font-bold h-11 rounded-xl shadow-xs flex items-center justify-center space-x-1.5 text-sm"
+          className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold h-11 rounded-xl shadow-md shadow-indigo-500/20 active:scale-[0.98] transition-all flex items-center justify-center space-x-2 text-sm"
         >
           <Play className="w-4 h-4 fill-white" />
-          <span>{isParcel ? "Start Cooking Parcel 📦👨‍🍳" : "Start Cooking 👨‍🍳"}</span>
+          <span>{isParcel ? "Start Cooking Parcel 👨‍🍳" : "Start Cooking 👨‍🍳"}</span>
         </Button>
       );
     }
@@ -670,10 +670,10 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
       return (
         <Button
           onClick={() => updateStatus(order.id, 'READY')}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold h-11 rounded-xl shadow-xs flex items-center justify-center space-x-1.5 text-sm"
+          className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold h-11 rounded-xl shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all flex items-center justify-center space-x-2 text-sm"
         >
           <CheckCircle2 className="w-4 h-4" />
-          <span>{isParcel ? "Mark Parcel Ready for Packing 📦🛎️" : "Mark Ready to Serve 🛎️"}</span>
+          <span>{isParcel ? "Mark Parcel Ready 📦🛎️" : "Mark Ready to Serve 🛎️"}</span>
         </Button>
       );
     }
@@ -682,10 +682,10 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
         <Button
           onClick={() => updateStatus(order.id, 'COMPLETED')}
           variant="outline"
-          className="w-full border-2 border-emerald-500 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 active:scale-98 font-bold h-11 rounded-xl flex items-center justify-center space-x-1.5 text-xs sm:text-sm"
+          className="w-full border-2 border-emerald-500 text-emerald-700 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 font-bold h-11 rounded-xl active:scale-[0.98] transition-all flex items-center justify-center space-x-2 text-sm"
         >
           <Check className="w-4 h-4" />
-          <span>{isParcel ? "Mark Handed Over / Packed ✅" : "Mark Served to Table"}</span>
+          <span>{isParcel ? "Hand Over / Completed ✅" : "Mark Served to Table ✅"}</span>
         </Button>
       );
     }
@@ -694,37 +694,39 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
 
   const OrderCard = ({ order }: { order: Order }) => {
     const elapsed = getElapsedTime(order.createdAt);
-    const fresh = isOrderFresh(order.createdAt);
+    const diffMins = Math.floor((new Date().getTime() - new Date(order.createdAt).getTime()) / 60000);
     const isNew = order.status === 'PLACED' || order.status === 'CONFIRMED';
     const isCooking = order.status === 'PREPARING';
     const isReady = order.status === 'READY';
     const isParcel = order.type === 'TAKEAWAY';
 
+    // Elapsed time styling
+    const isUrgent = diffMins >= 25;
+    const isWarning = diffMins >= 15 && diffMins < 25;
+
     return (
-      <div className={`bg-white dark:bg-slate-900 border rounded-2xl p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-all ${
-        fresh && isNew
-          ? "border-emerald-500 ring-2 ring-emerald-400/40 bg-emerald-50/20 dark:bg-slate-900/95"
-          : isCooking
-          ? "border-blue-200 dark:border-blue-900/40"
-          : isReady
-          ? "border-emerald-200 dark:border-emerald-900/40"
-          : "border-slate-200 dark:border-slate-800"
-      }`}>
-        {/* Card Header */}
-        <div className="flex items-start justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-          <div>
+      <div className={cn(
+        "rounded-2xl border bg-white dark:bg-slate-900 p-3.5 flex flex-col h-[380px] shadow-xs hover:shadow-lg transition-all duration-200",
+        isNew && "border-rose-300 dark:border-rose-900/70 ring-2 ring-rose-500/20 bg-gradient-to-b from-rose-50/20 to-white dark:from-rose-950/10 dark:to-slate-900",
+        isCooking && "border-blue-300 dark:border-blue-900/70 ring-2 ring-blue-500/20 bg-gradient-to-b from-blue-50/20 to-white dark:from-blue-950/10 dark:to-slate-900",
+        isReady && "border-emerald-300 dark:border-emerald-900/70 ring-2 ring-emerald-500/20 bg-gradient-to-b from-emerald-50/20 to-white dark:from-emerald-950/10 dark:to-slate-900",
+        !isNew && !isCooking && !isReady && "border-slate-200 dark:border-slate-800"
+      )}>
+        {/* Card Header (Fixed at top) */}
+        <div className="shrink-0 flex items-start justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+          <div className="space-y-0.5 min-w-0 flex-1">
             <div className="flex items-center space-x-2 flex-wrap gap-y-1">
               {isParcel ? (
-                <div className="flex items-center gap-1.5">
-                  <span className="bg-amber-500 text-slate-950 font-black text-xs px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs">
-                    <Package className="w-3.5 h-3.5" /> PARCEL
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="bg-amber-500 text-slate-950 font-black text-[11px] px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs shrink-0">
+                    <Package className="w-3 h-3" /> PARCEL
                   </span>
-                  <span className="text-lg font-black tracking-tight text-slate-900 dark:text-white">
+                  <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white truncate">
                     {order.groupName || "Takeaway"}
                   </span>
                 </div>
               ) : (
-                <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center">
+                <span className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center">
                   {order.table ? `Table ${order.table.number}` : 'Dine-In'}
                   {order.partyLabel && (
                     <span className="ml-1.5 text-xs font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 px-1.5 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">
@@ -734,75 +736,87 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
                 </span>
               )}
 
-              {fresh && isNew && (
-                <span className="bg-emerald-500 text-white font-black text-[10px] px-2 py-0.5 rounded-full animate-pulse uppercase">
-                  NEW!
+              {isNew && (
+                <span className="bg-rose-500 text-white font-black text-[10px] px-2 py-0.5 rounded-full animate-pulse uppercase tracking-wider shrink-0">
+                  NEW
                 </span>
               )}
               {isCooking && (
-                <span className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 font-bold text-[10px] px-2 py-0.5 rounded-full uppercase">
+                <span className="bg-blue-600 text-white font-bold text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                   Cooking
                 </span>
               )}
               {isReady && (
-                <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold text-[10px] px-2 py-0.5 rounded-full uppercase">
+                <span className="bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                   Ready
                 </span>
               )}
             </div>
 
-            <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
-              <span>#{order.id.slice(-6).toUpperCase()}</span>
+            <div className="flex items-center space-x-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+              <span className="font-mono">#{order.id.slice(-6).toUpperCase()}</span>
               {order.table?.location && <span>• {order.table.location}</span>}
               {order.customer?.name && <span>• {order.customer.name}</span>}
               {order.guestCount && <span>• {order.guestCount} Pax</span>}
             </div>
           </div>
 
-          <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 shrink-0">
-            <Clock className="w-3.5 h-3.5 text-amber-500 mr-1" />
+          {/* Time Badge */}
+          <div className={cn(
+            "flex items-center space-x-1 px-2 py-0.5 rounded-lg text-xs font-bold shrink-0 ml-2",
+            isUrgent && "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse",
+            isWarning && "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800",
+            !isUrgent && !isWarning && "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+          )}>
+            <Clock className={cn("w-3.5 h-3.5 mr-0.5", isUrgent ? "text-rose-600" : isWarning ? "text-amber-600" : "text-slate-400")} />
             <span>{elapsed}</span>
           </div>
         </div>
 
-        {/* Dish Items List */}
-        <div className="py-3.5 space-y-2.5 flex-1">
+        {/* Dish Items List (Scrollable middle container) */}
+        <div className="flex-1 min-h-0 overflow-y-auto py-2.5 space-y-2 pr-1 scrollbar-thin">
           {(!order.items || order.items.length === 0) ? (
             <p className="text-xs text-slate-400 dark:text-slate-500 italic py-2">
               Order placed • Waiting for kitchen preparation...
             </p>
           ) : (
             order.items.map((item) => (
-              <div key={item.id} className="flex items-start justify-between text-sm">
-                <div className="flex items-start space-x-2 flex-1">
-                  <span className="bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800/50 shrink-0 mt-0.5">
-                    {item.quantity}x
+              <div key={item.id} className="flex items-start gap-2 text-sm group">
+                <span className="w-6 h-6 rounded-md bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                  {item.quantity}x
+                </span>
+                <div className="flex-1 min-w-0">
+                  <span className="font-bold text-slate-900 dark:text-slate-100 text-sm leading-snug block">
+                    {item.menuItem?.name || "Dish Item"}
                   </span>
-                  <div>
-                    <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm sm:text-base leading-tight block">
-                      {item.menuItem?.name || "Dish Item"}
-                    </span>
-                    {item.specialInstructions && (
-                      <p className={cn(
-                        "text-xs rounded px-2 py-1 mt-1 font-semibold",
-                        item.specialInstructions.includes("ADD-ON")
-                          ? "bg-amber-500 text-slate-950 font-black shadow-xs flex items-center gap-1"
-                          : item.specialInstructions.includes("PARCEL")
-                          ? "bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 border border-amber-300"
-                          : "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 italic"
-                      )}>
-                        {item.specialInstructions}
-                      </p>
-                    )}
-                  </div>
+                  
+                  {item.specialInstructions && (
+                    <div className="mt-0.5">
+                      {item.specialInstructions.includes("ADD-ON") ? (
+                        <span className="inline-flex items-center gap-1 bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded shadow-2xs">
+                          ⚡ Add-On
+                        </span>
+                      ) : item.specialInstructions.includes("PARCEL") ? (
+                        isParcel ? null : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-200 dark:border-amber-800/40">
+                            📦 Parcel Item
+                          </span>
+                        )
+                      ) : (
+                        <span className="inline-block bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-amber-800 dark:text-amber-300 text-[11px] px-1.5 py-0.2 rounded italic font-medium">
+                          📝 {item.specialInstructions}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))
           )}
         </div>
 
-        {/* Action Button */}
-        <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+        {/* Action Button (Pinned firmly at bottom) */}
+        <div className="shrink-0 pt-2.5 border-t border-slate-100 dark:border-slate-800">
           {renderOrderCardActions(order)}
         </div>
       </div>
@@ -810,67 +824,96 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
   };
 
   return (
-    <div className="space-y-3 pb-8 md:pb-0">
-      {/* KDS TOP CONTROL BAR */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xs space-y-3">
+    <div className="space-y-4 pb-12">
+      {/* UNIFIED CONTROL BAR */}
+      <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 rounded-2xl p-2.5 sm:p-3.5 shadow-xs sticky top-2 z-20 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         
-        {/* Row 1: Metrics Strip (Horizontal Scrolling on mobile) */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none flex-1">
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold text-xs shrink-0">
-              <ChefHat className="w-4 h-4 text-amber-500" />
-              <span>Active: {orders.length}</span>
-            </div>
-
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 font-bold text-xs shrink-0">
-              <span className="w-2 h-2 rounded-full bg-rose-500" />
-              <span>New: {newOrders.length}</span>
-            </div>
-
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-300 font-bold text-xs shrink-0">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              <span>Cooking: {preparingOrders.length}</span>
-            </div>
-
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-bold text-xs shrink-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span>Ready: {readyOrders.length}</span>
-            </div>
-          </div>
-
-          <Button
-            onClick={() => {
-              setIsRefreshing(true);
-              fetchOrders();
-            }}
-            size="sm"
-            variant="outline"
-            className="h-8 sm:h-9 text-xs border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 px-2.5 rounded-xl hidden sm:flex"
+        {/* Left: Stage Tabs */}
+        <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl gap-1 overflow-x-auto scrollbar-none shrink-0">
+          <button
+            onClick={() => setActiveTab("NEW")}
+            className={cn(
+              "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap",
+              activeTab === "NEW"
+                ? "bg-rose-600 text-white shadow-xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            )}
           >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Sync
-          </Button>
+            <span className={cn("w-2 h-2 rounded-full", activeTab === "NEW" ? "bg-white" : "bg-rose-500")} />
+            <span>New</span>
+            <span className={cn("text-[11px] px-1.5 py-0.2 rounded-full font-bold", activeTab === "NEW" ? "bg-rose-700/80 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300")}>
+              {newOrders.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("PREPARING")}
+            className={cn(
+              "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap",
+              activeTab === "PREPARING"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            )}
+          >
+            <span className={cn("w-2 h-2 rounded-full", activeTab === "PREPARING" ? "bg-white" : "bg-blue-500")} />
+            <span>Cooking</span>
+            <span className={cn("text-[11px] px-1.5 py-0.2 rounded-full font-bold", activeTab === "PREPARING" ? "bg-blue-700/80 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300")}>
+              {preparingOrders.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("READY")}
+            className={cn(
+              "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap",
+              activeTab === "READY"
+                ? "bg-emerald-600 text-white shadow-xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            )}
+          >
+            <span className={cn("w-2 h-2 rounded-full", activeTab === "READY" ? "bg-white" : "bg-emerald-500")} />
+            <span>Ready</span>
+            <span className={cn("text-[11px] px-1.5 py-0.2 rounded-full font-bold", activeTab === "READY" ? "bg-emerald-700/80 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300")}>
+              {readyOrders.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("ALL")}
+            className={cn(
+              "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
+              activeTab === "ALL"
+                ? "bg-white text-slate-900 dark:bg-slate-800 dark:text-white shadow-xs"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-900"
+            )}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>All</span>
+            <span className="text-[11px] px-1.5 py-0.2 rounded-full font-bold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+              {filteredOrders.length}
+            </span>
+          </button>
         </div>
 
-        {/* Row 2: Voice Controls & Filter Actions */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80">
-          {/* Order Type Filter Pills */}
+        {/* Right: Type Filter & Search Controls */}
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          {/* Order Type Toggle */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl gap-1 shrink-0 overflow-x-auto scrollbar-none">
             <button
               onClick={() => setOrderTypeFilter("ALL")}
               className={cn(
-                "flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-center whitespace-nowrap",
+                "px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
                 orderTypeFilter === "ALL"
                   ? "bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white"
                   : "text-slate-500 hover:text-slate-800"
               )}
             >
-              All ({orders.length})
+              All
             </button>
             <button
               onClick={() => setOrderTypeFilter("DINE_IN")}
               className={cn(
-                "flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 whitespace-nowrap",
+                "px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap",
                 orderTypeFilter === "DINE_IN"
                   ? "bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white"
                   : "text-slate-500 hover:text-slate-800"
@@ -882,7 +925,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
             <button
               onClick={() => setOrderTypeFilter("TAKEAWAY")}
               className={cn(
-                "flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 whitespace-nowrap",
+                "px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap",
                 orderTypeFilter === "TAKEAWAY"
                   ? "bg-amber-500 text-slate-950 font-black shadow-xs"
                   : "text-amber-700 dark:text-amber-400 hover:bg-amber-50"
@@ -893,299 +936,81 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
             </button>
           </div>
 
-          {/* Voice Assistant & Search Controls */}
-          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
-            {/* TWO-WAY VOICE COMMAND BUTTON */}
-            <Button
-              onClick={startVoiceListening}
-              className={cn(
-                "h-9 px-3 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-xs active:scale-95 flex-1 sm:flex-initial justify-center",
-                isListening
-                  ? "bg-rose-600 hover:bg-rose-700 text-white animate-pulse"
-                  : "bg-emerald-600 hover:bg-emerald-700 text-white"
-              )}
-              title="Speak command (e.g. 'Start cooking table 4', 'Table 4 ready', 'What is queue?')"
-            >
-              <Mic className={cn("w-4 h-4", isListening && "animate-bounce")} />
-              <span>
-                {isListening
-                  ? "Listening..."
-                  : voiceLanguage === "mr"
-                  ? "🎙️ व्हॉइस कमांड"
-                  : voiceLanguage === "hi"
-                  ? "🎙️ वॉइस कमांड"
-                  : "🎙️ Voice Command"}
-              </span>
-            </Button>
-
-            {/* Language Selector */}
-            <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-0.5 rounded-xl gap-0.5 shrink-0 border border-slate-200/80 dark:border-slate-800">
-              <Globe className="w-3 h-3 text-slate-400 ml-1.5 mr-0.5 hidden xs:inline-block" />
-              <button
-                onClick={() => handleLanguageChange("mr")}
-                className={cn(
-                  "px-2 py-1 rounded-lg text-[11px] font-bold transition-all",
-                  voiceLanguage === "mr"
-                    ? "bg-indigo-600 text-white shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                )}
-              >
-                मराठी
-              </button>
-              <button
-                onClick={() => handleLanguageChange("hi")}
-                className={cn(
-                  "px-2 py-1 rounded-lg text-[11px] font-bold transition-all",
-                  voiceLanguage === "hi"
-                    ? "bg-indigo-600 text-white shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                )}
-              >
-                हिंदी
-              </button>
-              <button
-                onClick={() => handleLanguageChange("en")}
-                className={cn(
-                  "px-2 py-1 rounded-lg text-[11px] font-bold transition-all",
-                  voiceLanguage === "en"
-                    ? "bg-indigo-600 text-white shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                )}
-              >
-                EN
-              </button>
-            </div>
-
-            {/* AI Voice Toggle */}
-            <Button
-              onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
-              size="sm"
-              variant={isVoiceEnabled ? "default" : "outline"}
-              className={cn(
-                "h-9 text-xs rounded-xl font-bold px-2.5 transition-all shrink-0",
-                isVoiceEnabled
-                  ? "bg-indigo-600 hover:bg-indigo-700 text-white"
-                  : "text-slate-500"
-              )}
-            >
-              {isVoiceEnabled ? (
-                <>
-                  <Volume2 className="w-3.5 h-3.5 mr-1 text-emerald-300 animate-pulse" />
-                  <span className="hidden xs:inline">Voice:</span> ON
-                </>
-              ) : (
-                <>
-                  <VolumeX className="w-3.5 h-3.5 mr-1" />
-                  <span className="hidden xs:inline">Voice:</span> OFF
-                </>
-              )}
-            </Button>
-
-            {/* Search Box */}
-            <div className="relative w-full sm:w-40 mt-1 sm:mt-0">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input
-                placeholder="Search..."
-                value={searchTable}
-                onChange={(e) => setSearchTable(e.target.value)}
-                className="h-9 text-xs pl-8 w-full bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl"
-              />
-            </div>
+          {/* Search Box */}
+          <div className="relative flex-1 sm:w-44 min-w-[130px]">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Search table/item..."
+              value={searchTable}
+              onChange={(e) => setSearchTable(e.target.value)}
+              className="h-8.5 text-xs pl-8 w-full bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl"
+            />
           </div>
+          
+          <Button
+            onClick={() => {
+              setIsRefreshing(true);
+              fetchOrders();
+            }}
+            size="icon"
+            variant="outline"
+            className="h-8.5 w-8.5 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl shrink-0"
+            title="Refresh Orders"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
       </div>
 
-      {/* MOBILE STAGE TABS (Visible only on screens < md) */}
-      <div className="md:hidden flex p-1 bg-slate-200/70 dark:bg-slate-950/80 rounded-2xl gap-1">
-        <button
-          onClick={() => setActiveMobileTab("NEW")}
-          className={cn(
-            "flex-1 flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-xs font-black transition-all",
-            activeMobileTab === "NEW"
-              ? "bg-white text-rose-600 dark:bg-slate-900 dark:text-rose-400 shadow-xs"
-              : "text-slate-600 dark:text-slate-400"
-          )}
-        >
-          <span className="w-2 h-2 rounded-full bg-rose-500" />
-          <span>New ({newOrders.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveMobileTab("PREPARING")}
-          className={cn(
-            "flex-1 flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-xs font-black transition-all",
-            activeMobileTab === "PREPARING"
-              ? "bg-white text-blue-600 dark:bg-slate-900 dark:text-blue-400 shadow-xs"
-              : "text-slate-600 dark:text-slate-400"
-          )}
-        >
-          <span className="w-2 h-2 rounded-full bg-blue-500" />
-          <span>Cooking ({preparingOrders.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveMobileTab("READY")}
-          className={cn(
-            "flex-1 flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-xs font-black transition-all",
-            activeMobileTab === "READY"
-              ? "bg-white text-emerald-600 dark:bg-slate-900 dark:text-emerald-400 shadow-xs"
-              : "text-slate-600 dark:text-slate-400"
-          )}
-        >
-          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-          <span>Ready ({readyOrders.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveMobileTab("ALL")}
-          className={cn(
-            "px-3 flex items-center justify-center space-x-1 py-2.5 rounded-xl text-xs font-bold transition-all",
-            activeMobileTab === "ALL"
-              ? "bg-white text-slate-900 dark:bg-slate-900 dark:text-white shadow-xs"
-              : "text-slate-500 dark:text-slate-400"
-          )}
-        >
-          <Layers className="w-3.5 h-3.5" />
-          <span>All ({filteredOrders.length})</span>
-        </button>
-      </div>
-
-      {/* MOBILE SINGLE STAGE FEED (Screens < md) */}
-      <div className="md:hidden space-y-3 pb-8">
-        {activeMobileTab === "NEW" && (
+      {/* ORDERS GRID FEED */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+        {activeTab === "NEW" && (
           newOrders.length === 0 ? (
-            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400">
-              <Utensils className="w-10 h-10 mx-auto mb-2 opacity-30 text-rose-500" />
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No new incoming orders</p>
-              <p className="text-xs text-slate-400 mt-1">Orders placed will pop up here with voice announcement</p>
+            <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 col-span-full shadow-xs">
+              <Utensils className="w-12 h-12 mx-auto mb-3 opacity-25 text-rose-500" />
+              <p className="text-base font-bold text-slate-700 dark:text-slate-200">No new incoming orders</p>
+              <p className="text-xs text-slate-400 mt-1">New customer and takeaway orders will appear here</p>
             </div>
           ) : (
             newOrders.map(order => <OrderCard key={order.id} order={order} />)
           )
         )}
 
-        {activeMobileTab === "PREPARING" && (
+        {activeTab === "PREPARING" && (
           preparingOrders.length === 0 ? (
-            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400">
-              <ChefHat className="w-10 h-10 mx-auto mb-2 opacity-30 text-blue-500" />
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No food currently cooking</p>
-              <p className="text-xs text-slate-400 mt-1">Tap &apos;Start Cooking&apos; or use voice command</p>
+            <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 col-span-full shadow-xs">
+              <ChefHat className="w-12 h-12 mx-auto mb-3 opacity-25 text-blue-500" />
+              <p className="text-base font-bold text-slate-700 dark:text-slate-200">No food currently cooking</p>
+              <p className="text-xs text-slate-400 mt-1">Tap &apos;Start Cooking&apos; on any new order ticket</p>
             </div>
           ) : (
             preparingOrders.map(order => <OrderCard key={order.id} order={order} />)
           )
         )}
 
-        {activeMobileTab === "READY" && (
+        {activeTab === "READY" && (
           readyOrders.length === 0 ? (
-            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400">
-              <CheckCircle2 className="w-10 h-10 mx-auto mb-2 opacity-30 text-emerald-500" />
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No orders awaiting pickup</p>
-              <p className="text-xs text-slate-400 mt-1">Dishes marked ready will appear here for staff</p>
+            <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 col-span-full shadow-xs">
+              <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-25 text-emerald-500" />
+              <p className="text-base font-bold text-slate-700 dark:text-slate-200">No orders awaiting pickup</p>
+              <p className="text-xs text-slate-400 mt-1">Dishes marked ready will appear here for staff to serve</p>
             </div>
           ) : (
             readyOrders.map(order => <OrderCard key={order.id} order={order} />)
           )
         )}
 
-        {activeMobileTab === "ALL" && (
+        {activeTab === "ALL" && (
           filteredOrders.length === 0 ? (
-            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400">
-              <Utensils className="w-10 h-10 mx-auto mb-2 opacity-30" />
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No active orders</p>
+            <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 col-span-full shadow-xs">
+              <Utensils className="w-12 h-12 mx-auto mb-3 opacity-25" />
+              <p className="text-base font-bold text-slate-700 dark:text-slate-200">No active kitchen orders</p>
+              <p className="text-xs text-slate-400 mt-1">All kitchen orders are cleared</p>
             </div>
           ) : (
             filteredOrders.map(order => <OrderCard key={order.id} order={order} />)
           )
         )}
-      </div>
-
-      {/* DESKTOP 3-COLUMN KANBAN WORKSPACE (Screens md+) */}
-      <div className="hidden md:grid md:grid-cols-3 gap-4 h-[calc(100vh-140px)] min-h-[550px]">
-        
-        {/* COLUMN 1: NEW TICKETS */}
-        <div className="bg-slate-100/60 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 flex flex-col h-full overflow-hidden shadow-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-3 px-1">
-            <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-slate-200">
-                1. New Orders
-              </h2>
-            </div>
-            <Badge className="bg-rose-600 text-white font-bold text-xs px-2 py-0.5">
-              {newOrders.length}
-            </Badge>
-          </div>
-
-          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-            {newOrders.length === 0 ? (
-              <div className="text-center py-16 text-slate-400">
-                <Utensils className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                <p className="text-xs font-semibold text-slate-500">No new incoming orders</p>
-              </div>
-            ) : (
-              newOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* COLUMN 2: IN PREPARATION */}
-        <div className="bg-slate-100/60 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 flex flex-col h-full overflow-hidden shadow-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-3 px-1">
-            <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-slate-200">
-                2. Cooking / Preparing
-              </h2>
-            </div>
-            <Badge className="bg-blue-600 text-white font-bold text-xs px-2 py-0.5">
-              {preparingOrders.length}
-            </Badge>
-          </div>
-
-          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-            {preparingOrders.length === 0 ? (
-              <div className="text-center py-16 text-slate-400">
-                <ChefHat className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                <p className="text-xs font-semibold text-slate-500">No food currently cooking</p>
-              </div>
-            ) : (
-              preparingOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* COLUMN 3: READY TO SERVE */}
-        <div className="bg-slate-100/60 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 flex flex-col h-full overflow-hidden shadow-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-3 px-1">
-            <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-slate-200">
-                3. Ready for Service
-              </h2>
-            </div>
-            <Badge className="bg-emerald-600 text-white font-bold text-xs px-2 py-0.5">
-              {readyOrders.length}
-            </Badge>
-          </div>
-
-          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-            {readyOrders.length === 0 ? (
-              <div className="text-center py-16 text-slate-400">
-                <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                <p className="text-xs font-semibold text-slate-500">No orders awaiting pickup</p>
-              </div>
-            ) : (
-              readyOrders.map((order) => (
-                <OrderCard key={order.id} order={order} />
-              ))
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );
