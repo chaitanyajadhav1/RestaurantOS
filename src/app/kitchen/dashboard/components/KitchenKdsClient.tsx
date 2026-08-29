@@ -95,7 +95,7 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
   const [searchTable, setSearchTable] = useState("");
   const [orderTypeFilter, setOrderTypeFilter] = useState<"ALL" | "DINE_IN" | "TAKEAWAY">("ALL");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"NEW" | "PREPARING" | "READY" | "ALL">("NEW");
+  const [activeTab, setActiveTab] = useState<"ALL" | "NEW" | "PREPARING" | "READY">("ALL");
   
   // Voice Assistant States
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
@@ -189,6 +189,13 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
   }, [voiceLanguage]);
 
   const updateStatus = useCallback(async (id: string, status: string, customNotification?: string) => {
+    // Optimistically update order in place
+    setOrders(prev => 
+      status === "COMPLETED" 
+        ? prev.filter(o => o.id !== id)
+        : prev.map(o => o.id === id ? { ...o, status } : o)
+    );
+
     try {
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
@@ -201,11 +208,13 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
         fetchOrders();
       } else {
         toast({ variant: "destructive", title: "Error", description: json.error });
+        fetchOrders();
       }
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Network error" });
+      fetchOrders();
     }
-  }, []);
+  }, [fetchOrders, toast]);
 
   // ====================================================
   // READ OUT CURRENT ORDERS IN QUEUE ALOUD
@@ -831,6 +840,22 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
         {/* Left: Stage Tabs */}
         <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl gap-1 overflow-x-auto scrollbar-none shrink-0">
           <button
+            onClick={() => setActiveTab("ALL")}
+            className={cn(
+              "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
+              activeTab === "ALL"
+                ? "bg-white text-slate-900 dark:bg-slate-800 dark:text-white shadow-xs font-black"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-900"
+            )}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>All Active</span>
+            <span className={cn("text-[11px] px-1.5 py-0.2 rounded-full font-bold", activeTab === "ALL" ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300")}>
+              {filteredOrders.length}
+            </span>
+          </button>
+
+          <button
             onClick={() => setActiveTab("NEW")}
             className={cn(
               "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap",
@@ -875,22 +900,6 @@ export function KitchenKdsClient({ initialOrders }: { initialOrders: Order[] }) 
             <span>Ready</span>
             <span className={cn("text-[11px] px-1.5 py-0.2 rounded-full font-bold", activeTab === "READY" ? "bg-emerald-700/80 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300")}>
               {readyOrders.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("ALL")}
-            className={cn(
-              "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
-              activeTab === "ALL"
-                ? "bg-white text-slate-900 dark:bg-slate-800 dark:text-white shadow-xs"
-                : "text-slate-500 dark:text-slate-400 hover:text-slate-900"
-            )}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>All</span>
-            <span className="text-[11px] px-1.5 py-0.2 rounded-full font-bold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-              {filteredOrders.length}
             </span>
           </button>
         </div>
